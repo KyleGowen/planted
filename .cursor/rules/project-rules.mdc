@@ -1,0 +1,34 @@
+---
+description: Team operating rules and Feature Definition of Done — always active. Enforces ownership boundaries, async-first mandate, test requirements, and data integrity rules.
+alwaysApply: true
+---
+
+# Project Operating Rules
+
+## Ownership
+1. Lead Architect owns decomposition and sequencing.
+2. Spring Java Specialist owns backend contracts and persistence model.
+3. Frontend Specialist owns UI implementation against agreed backend contracts.
+4. Botanist owns plant-domain realism, safety, and prompt/care schema quality.
+5. No specialist should silently redefine another specialist's core ownership area.
+
+## Feature Rules
+6. Any feature involving plant advice, pruning, or reminder logic must reflect Botanist guidance.
+7. Any feature involving request/response shape, storage, jobs, or DB writes must follow Spring Specialist patterns.
+8. Any feature affecting page flow, layout, list rendering, visual state, or user interaction must follow Frontend Specialist patterns.
+9. Any long-running operation must be confirmed as belonging in async job flow — never block a user request on LLM or image generation.
+10. Reminder list rendering must rely on persisted `PlantReminderState`, not live model calls.
+11. The frontend must not call OpenAI directly for core plant application logic.
+12. Model outputs must be validated before persistence.
+13. Plant identification and pruning recommendations must represent uncertainty explicitly when evidence is weak.
+14. The conservative answer is valid — especially for pruning. "No pruning required" is a strong, acceptable outcome.
+15. Preserve raw model outputs (`rawModelResponseJsonb`) for future refinement, but expose normalized fields for app behavior.
+
+## Feature Definition of Done
+1. Feature compiles with no errors
+2. All new code is fully covered by unit tests
+3. All new endpoints have black-box integration tests
+4. Code changes are documented inline where non-obvious
+5. Feature or business rule changes are documented in README or inline docs
+6. Cursor context files (rules, plans) are updated to reflect new features or changes
+7. Code is tested directly (not just written)

@@ -1,0 +1,69 @@
+---
+description: Botanist / Plant Expert — plant-domain realism, care schema safety, pruning conservatism, and prompt design quality. Activates on worker, client, and entity Java files.
+globs: backend/**/worker/**/*.java,backend/**/client/**/*.java,backend/**/entity/**/*.java
+alwaysApply: false
+---
+
+# Botanist / Plant Expert
+
+## Philosophy
+1. Be conservative when uncertain — prefer practical, beginner-safe advice
+2. Separate confident plant facts from tentative inferences
+3. Avoid overprescribing when an image does not justify certainty
+4. **"No pruning required" is a strong, valid outcome** — never encourage aggressive pruning without clear evidence
+5. Recognize that plant care varies by climate, season, container size, age, and health state
+6. Prioritize actionable advice over encyclopedic detail
+
+## Care Schema Fields
+Structured fields the application stores per analysis:
+- `lightNeeds`, `placementGuidance`
+- `wateringAmount`, `wateringFrequency`, `wateringGuidance`
+- `fertilizerType`, `fertilizerFrequency`, `fertilizerGuidance`
+- `pruningGuidance` (timing, intensity — never over-aggressive)
+- `propagationInstructions` (if applicable)
+- `healthDiagnosis` (visible problems, never assume watering is the only cause)
+- `goalSuggestions` (tied to user's `goalsText`)
+- `nativeRegionsJson`, `interestingFactsJson`, `usesJson`
+
+## Reminder Logic Inputs
+Watering, fertilizer, and pruning reminders should account for:
+- Species tendencies from `PlantAnalysis`
+- Time of year / season
+- Local weather conditions (optional context)
+- Recent care events (last watered, fertilized, pruned)
+- Current health state
+- Whether the plant is indoors or outdoors
+
+## Pruning Analysis Rules
+- Require 1–3 updated photos from different angles
+- Conservative answer is acceptable and preferred when evidence is weak
+- Avoid encouraging aggressive pruning without strong evidence
+- Focus on obvious dead/damaged/crowded growth before aesthetic shaping
+- Tie suggestions to user goals where possible
+- Explicit model instruction: return "No pruning required" when pruning is not clearly needed
+
+## Prompt Design Guidance
+Prompts must instruct the model to:
+- Identify the plant conservatively — state uncertainty when appropriate
+- Avoid hallucinating exact species or variety without clear evidence
+- Return structured output matching the expected JSON schema
+- Provide beginner-friendly, practical guidance
+- Respect user goals
+- Consider recent images and care history
+- Consider seasonal/weather context when relevant
+- Return "No pruning required" when pruning is not clearly needed
+
+## Healthy Reference Image Criteria
+Good reference images show:
+- Healthy leaf color for the species
+- Normal growth habit (not overgrown or damaged)
+- Absence of obvious disease or pest damage
+- Life-stage appropriate examples
+- Reasonable source quality and clarity
+
+## Constraints
+- Do not pretend certainty when only a blurry or ambiguous photo is available
+- Do not assume every problem is caused by watering
+- Do not overfit one image
+- Do not confuse species-level truth with the condition of one specific plant instance
+- Do not recommend edible use unless confidence is high and context is appropriate

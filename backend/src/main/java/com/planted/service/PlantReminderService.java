@@ -1,0 +1,222 @@
+package com.planted.service;
+
+import com.planted.dto.PlantImageDto;
+import com.planted.dto.PlantReminderResponse;
+import com.planted.entity.*;
+import com.planted.mapper.PlantMapper;
+import com.planted.repository.*;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Optional;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class PlantReminderService {
+
+    private final PlantRepository plantRepository;
+    private final PlantReminderStateRepository reminderStateRepository;
+    private final PlantImageRepository imageRepository;
+    private final PlantAnalysisRepository analysisRepository;
+    private final PlantWateringEventRepository wateringEventRepository;
+    private final PlantFertilizerEventRepository fertilizerEventRepository;
+    private final PlantPruneEventRepository pruneEventRepository;
+    private final PlantMapper plantMapper;
+
+    @Transactional(readOnly = true)
+    public List<PlantReminderResponse> getWateringReminders() {
+        return plantRepository.findAllActive().stream()
+                .map(plant -> {
+                    PlantReminderState state = reminderStateRepository.findByPlantId(plant.getId()).orElse(null);
+                    boolean due = state != null && state.isWateringDue();
+                    boolean overdue = state != null && state.isWateringOverdue();
+                    String instruction = state != null ? state.getNextWateringInstruction() : null;
+                    PlantImageDto img = getIllustratedImageDto(plant.getId());
+                    return new PlantReminderResponse(
+                            plant.getId(), plant.getName(), plant.getSpeciesLabel(), img,
+                            due, overdue, instruction);
+                })
+                .filter(r -> r.isDue() || r.isOverdue())
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<PlantReminderResponse> getFertilizerReminders() {
+        return plantRepository.findAllActive().stream()
+                .map(plant -> {
+                    PlantReminderState state = reminderStateRepository.findByPlantId(plant.getId()).orElse(null);
+                    boolean due = state != null && state.isFertilizerDue();
+                    String instruction = state != null ? state.getNextFertilizerInstruction() : null;
+                    PlantImageDto img = getIllustratedImageDto(plant.getId());
+                    return new PlantReminderResponse(
+                            plant.getId(), plant.getName(), plant.getSpeciesLabel(), img,
+                            due, false, instruction);
+                })
+                .filter(PlantReminderResponse::isDue)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<PlantReminderResponse> getPruningReminders() {
+        return plantRepository.findAllActive().stream()
+                .map(plant -> {
+                    PlantReminderState state = reminderStateRepository.findByPlantId(plant.getId()).orElse(null);
+                    boolean due = state != null && state.isPruningDue();
+                    String instruction = state != null ? state.getNextPruningInstruction() : null;
+                    PlantImageDto img = getIllustratedImageDto(plant.getId());
+                    return new PlantReminderResponse(
+                            plant.getId(), plant.getName(), plant.getSpeciesLabel(), img,
+                            due, false, instruction);
+                })
+                .filter(PlantReminderResponse::isDue)
+                .toList();
+    }
+
+    /**
+     * Recompute reminder state from persisted care history and latest analysis.
+     * Called by the PLANT_REMINDER_RECOMPUTE job processor.
+     * This avoids live LLM calls for list rendering — uses species data + event history.
+     */
+    @Transactional
+    public void recomputeReminderState(Long plantId) {
+        PlantAnalysis analysis = analysisRepository
+                .findFirstByPlantIdAndAnalysisTypeOrderByCreatedAtDesc(
+                        plantId, PlantAnalysis.AnalysisType.REGISTRATION)
+                .filter(a -> a.getStatus() == PlantAnalysis.AnalysisStatus.COMPLETED)
+                .orElse(null);
+
+        Optional<PlantWateringEvent> lastWatering = wateringEventRepository
+                .findFirstByPlantIdOrderByWateredAtDesc(plantId);
+        Optional<PlantFertilizerEvent> lastFertilizer = fertilizerEventRepository
+                .findFirstByPlantIdOrderByFertilizedAtDesc(plantId);
+        Optional<PlantPruneEvent> lastPrune = pruneEventRepository
+                .findFirstByPlantIdOrderByPrunedAtDesc(plantId);
+
+        OffsetDateTime now = OffsetDateTime.now();
+
+        boolean wateringDue = false;
+        boolean wateringOverdue = false;
+        boolean fertilizerDue = false;
+        boolean pruningDue = false;
+        String nextWateringInstruction = null;
+        String nextFertilizerInstruction = null;
+        String nextPruningInstruction = null;
+
+        if (analysis != null) {
+            // Watering due check
+            String wateringFrequency = analysis.getWateringFrequency();
+            if (wateringFrequency != null && lastWatering.isPresent()) {
+                long daysSinceWatering = ChronoUnit.DAYS.between(
+                        lastWatering.get().getWateredAt(), now);
+                long frequencyDays = parseFrequencyDays(wateringFrequency);
+                if (frequencyDays > 0) {
+                    wateringDue = daysSinceWatering >= frequencyDays;
+                    wateringOverdue = daysSinceWatering >= frequencyDays + 2;
+                    long daysUntil = frequencyDays - daysSinceWatering;
+                    if (wateringOverdue) {
+                        nextWateringInstruction = String.format(
+                                "Overdue! %s was due %d days ago. Water now with %s.",
+                                "Watering", Math.abs(daysUntil),
+                                analysis.getWateringAmount() != null ? analysis.getWateringAmount() : "the recommended amount");
+                    } else if (wateringDue) {
+                        nextWateringInstruction = String.format(
+                                "Time to water today. Use %s.",
+                                analysis.getWateringAmount() != null ? analysis.getWateringAmount() : "the recommended amount");
+                    } else {
+                        nextWateringInstruction = String.format(
+                                "Water in %d day%s. Use %s.",
+                                daysUntil, daysUntil == 1 ? "" : "s",
+                                analysis.getWateringAmount() != null ? analysis.getWateringAmount() : "the recommended amount");
+                    }
+                }
+            } else if (lastWatering.isEmpty() && wateringFrequency != null) {
+                wateringDue = true;
+                nextWateringInstruction = "No watering history recorded. Check if watering is needed.";
+            }
+
+            // Fertilizer due check (simple: every ~30 days if frequency present)
+            String fertFrequency = analysis.getFertilizerFrequency();
+            if (fertFrequency != null && lastFertilizer.isPresent()) {
+                long daysSinceFertilizer = ChronoUnit.DAYS.between(
+                        lastFertilizer.get().getFertilizedAt(), now);
+                long fertDays = parseFrequencyDays(fertFrequency);
+                if (fertDays > 0) {
+                    fertilizerDue = daysSinceFertilizer >= fertDays;
+                    if (fertilizerDue) {
+                        nextFertilizerInstruction = String.format(
+                                "Apply %s fertilizer today.",
+                                analysis.getFertilizerType() != null ? analysis.getFertilizerType() : "balanced");
+                    } else {
+                        long daysUntilFert = fertDays - daysSinceFertilizer;
+                        nextFertilizerInstruction = String.format(
+                                "Next fertilizer in %d day%s.", daysUntilFert, daysUntilFert == 1 ? "" : "s");
+                    }
+                }
+            } else if (lastFertilizer.isEmpty() && fertFrequency != null) {
+                // No history — suggest based on season
+                nextFertilizerInstruction = "No fertilizer history. Apply " +
+                        (analysis.getFertilizerType() != null ? analysis.getFertilizerType() : "balanced") +
+                        " fertilizer if it's the growing season.";
+            }
+
+            // Pruning: if there's guidance and no recent prune, flag as potentially due
+            if (analysis.getPruningGuidance() != null) {
+                boolean noPruneHistory = lastPrune.isEmpty();
+                boolean prunedLongAgo = lastPrune
+                        .map(e -> ChronoUnit.DAYS.between(e.getPrunedAt(), now) > 180)
+                        .orElse(false);
+                pruningDue = noPruneHistory || prunedLongAgo;
+                nextPruningInstruction = analysis.getPruningGuidance();
+            }
+        }
+
+        // Upsert reminder state
+        PlantReminderState state = reminderStateRepository.findByPlantId(plantId)
+                .orElse(PlantReminderState.builder().plantId(plantId).build());
+
+        state.setWateringDue(wateringDue);
+        state.setWateringOverdue(wateringOverdue);
+        state.setFertilizerDue(fertilizerDue);
+        state.setPruningDue(pruningDue);
+        state.setNextWateringInstruction(nextWateringInstruction);
+        state.setNextFertilizerInstruction(nextFertilizerInstruction);
+        state.setNextPruningInstruction(nextPruningInstruction);
+
+        reminderStateRepository.save(state);
+        log.info("Reminder state recomputed for plant {}", plantId);
+    }
+
+    private PlantImageDto getIllustratedImageDto(Long plantId) {
+        return imageRepository
+                .findFirstByPlantIdAndImageTypeOrderByCreatedAtDesc(plantId, PlantImage.ImageType.ILLUSTRATED)
+                .map(plantMapper::toImageDto)
+                .orElse(null);
+    }
+
+    /**
+     * Parse a human-readable frequency like "every 7 days", "weekly", "twice a week" into days.
+     */
+    private long parseFrequencyDays(String frequency) {
+        if (frequency == null) return 0;
+        String lower = frequency.toLowerCase();
+        if (lower.contains("daily") || lower.contains("every day") || lower.contains("every 1 day")) return 1;
+        if (lower.contains("twice a week") || lower.contains("2x per week")) return 3;
+        if (lower.contains("weekly") || lower.contains("every week") || lower.contains("every 7 day")) return 7;
+        if (lower.contains("every 10 day")) return 10;
+        if (lower.contains("every 14 day") || lower.contains("bi-weekly") || lower.contains("biweekly")) return 14;
+        if (lower.contains("every 2 week")) return 14;
+        if (lower.contains("monthly") || lower.contains("every month") || lower.contains("every 30 day")) return 30;
+        if (lower.contains("every 6 week")) return 42;
+        if (lower.contains("every 2 month")) return 60;
+        // Try to extract a number
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+)\\s*day").matcher(lower);
+        if (m.find()) return Long.parseLong(m.group(1));
+        return 7; // default to weekly if unparseable
+    }
+}

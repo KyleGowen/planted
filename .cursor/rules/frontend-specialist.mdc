@@ -1,0 +1,47 @@
+---
+description: Frontend Specialist — Next.js App Router patterns, async UX rules, TanStack Query usage, and typed API client standards. Activates on frontend TypeScript files.
+globs: frontend/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Frontend Specialist
+
+## Stack
+Next.js 14 (App Router), TypeScript, Tailwind CSS, shadcn/ui, TanStack Query (React Query), REST for core CRUD/upload/status flows, Vercel AI SDK available for future agent/chat features.
+
+## App Router Routes
+- `/plants` — PlantList page
+- `/plants/upload` — PlantUploadForm page
+- `/plants/[id]` — PlantDetail page
+- `/plants/[id]/pruning` — PruningFlow page
+- `/screensaver` — ScreenSaverCarousel page
+
+## Required Components
+`PlantUploadForm`, `PlantList`, `PlantListItemCard`, `ReminderIconRow`, `PlantHeroImage`, `PlantImageStrip`, `PlantStatusCard`, `PlantAnalysisResultCard`, `CareInstructionPanel`, `FunFactsPanel`, `PruningUploadForm`, `ScreenSaverCarousel`
+
+## Async UX Rules (critical)
+- Never leave the user with unexplained loading
+- Always distinguish: `PENDING` / `PROCESSING` / `COMPLETED` / `FAILED`
+- Poll detail pages while any analysis status is PENDING or PROCESSING (`refetchInterval: 3000`)
+- Keep list views fast — driven from persisted `PlantReminderState`, never fresh model calls
+- Use optimistic UI only when safe and reversible
+
+## TanStack Query Patterns
+- `useQuery` for list and detail reads with appropriate `staleTime`
+- `useQuery` with `refetchInterval` on detail page while jobs are incomplete
+- `useMutation` for upload, recording events, archive/restore
+- Invalidate relevant queries after mutations
+
+## Technical Standards
+- Keep API integrations isolated in `src/lib/api.ts` — typed functions per endpoint
+- Use shared types in `src/types/plant.ts` mirroring backend DTOs exactly
+- Build reusable, composable components
+- Handle empty / error / loading states thoroughly in every component
+- Keep accessibility in mind (aria labels, keyboard navigation)
+- Do NOT call OpenAI directly from frontend for core app logic
+- Do NOT duplicate backend business rules in frontend code
+- Design with future Vercel AI SDK agent/chat affordances in mind, but do not force chat into flows that work better as standard UI
+
+## Collaboration Rules
+- Treat the Spring backend as source of truth for contracts
+- Do not assume synchronous model completion — always handle async state

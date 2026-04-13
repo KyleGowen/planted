@@ -1,0 +1,66 @@
+---
+description: Spring Java Specialist — backend architecture, coding standards, and async patterns. Activates when working on Java backend files.
+globs: backend/**/*.java
+alwaysApply: false
+---
+
+# Spring Java Specialist
+
+## Stack
+Java 21, Spring Boot, Maven, Spring Web, Spring Data JPA, PostgreSQL, AWS S3 (prod), local file storage (local dev), Amazon SQS (prod), OpenAI Responses API.
+
+## Architectural Rules
+1. **Async-first is the default.** User-facing requests must never block on LLM or image generation work.
+2. Background jobs must be record-ID based and retry-friendly.
+3. Persist both normalized fields AND raw JSONB model responses.
+4. Use interfaces around storage (`ImageStorageService`), queue (`PlantJobPublisher`), and external AI integrations (`OpenAiPlantClient`).
+5. Keep list rendering fast with persisted `PlantReminderState` — never compute from live model calls.
+6. Soft delete plants — never hard delete.
+
+## Package Structure
+```
+com.planted.
+  controller/    # thin, delegates to services
+  service/       # PlantCommandService, PlantQueryService, PlantReminderService
+  worker/        # PlantJobWorker, processors
+  client/        # OpenAiPlantClient, OpenAiImageGenerationClient
+  repository/    # one JpaRepository per entity
+  entity/        # Plant, PlantImage, PlantAnalysis, events, PlantReminderState
+  dto/           # explicit request/response records
+  config/        # Spring profiles, beans
+  storage/       # ImageStorageService + Local/S3 impls
+  queue/         # PlantJobPublisher + Local/SQS impls
+  mapper/        # entity ↔ DTO
+  reminder/      # reminder computation logic
+```
+
+## Data Rules
+- Normalize high-value app fields into columns on `plant_analyses`
+- Store raw model output in `rawModelResponseJsonb JSONB`
+- Histories (`watering`, `fertilizer`, `prune`) are first-class tables, not embedded JSON
+- Analysis status lifecycle: `PENDING → PROCESSING → COMPLETED | FAILED`
+
+## Reminder Recompute Triggers
+Recompute `PlantReminderState` whenever:
+- Watering event recorded
+- Fertilizer event recorded
+- Prune event recorded
+- Registration analysis completes
+- Reanalysis completes
+- Scheduled periodic recompute runs
+
+## Prompt Storage Rules
+- Prompt body stored as `TEXT`, never `VARCHAR(n)`
+- `llm_prompts` table holds versioned reusable templates with `prompt_key`, `version`, `role`
+- `llm_requests` table audits every rendered prompt sent to the model + response
+- `OpenAiPlantClient` must write to `llm_requests` on every call
+
+## Coding Standards
+- Thin controllers, richer services
+- Explicit DTOs — no entity leakage to API layer
+- Clear `@Transactional` boundaries
+- `@Valid` bean validation on request bodies
+- Good `@Slf4j` logging at service and worker boundaries
+- Interfaces for all external dependencies
+- Avoid framework magic when explicit code is clearer
+- Spring profiles: `local` uses `LocalImageStorageService` + `LocalPlantJobPublisher`; `prod` uses S3 + SQS

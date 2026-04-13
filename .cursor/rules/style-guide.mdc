@@ -1,0 +1,78 @@
+---
+description: Visual design system — botanical palette, typography, spacing, surface styling, reminder colors, and page-specific direction. Activates on frontend TypeScript and CSS files.
+globs: frontend/**/*.{ts,tsx,css}
+alwaysApply: false
+---
+
+# Visual Style Guide
+
+## Design Direction
+The interface should feel: **simple, classy, natural, calm, modern, light, clean, responsive.**
+It should feel like a blend of a tasteful home/lifestyle app, a premium gardening journal, and a calm naturalist reference tool.
+
+**Avoid:** loud colors, high-saturation gradients, heavy shadows, aggressive rounded cartoon styling, clutter, overly dense dashboards, gimmicky motion.
+
+## Color Palette
+- **Background:** `stone-50` / `white` (white to very light warm gray)
+- **Panels/cards:** `white` or `stone-50`
+- **Borders:** `stone-200` (soft, delicate)
+- **Text primary:** `stone-800` / `stone-900` (charcoal-gray-green, never pure black)
+- **Text secondary:** `stone-500`
+- **Accent green (primary):** muted sage — approx `#6b8f6d`, use `emerald-700` or custom sage token
+- **Accent lavender (secondary):** soft `violet-300` / `purple-200`
+- **Tertiary:** pale earthy green-gray
+
+**Avoid:** neon green, strong blue-heavy UI, harsh black-on-white, heavy purple, glossy gradients.
+
+## Reminder Colors (must feel natural, not alarming)
+- **Watering due:** `sky-500` / muted blue-green
+- **Fertilizer due:** `amber-700` / light earthy tan
+- **Pruning due:** `green-600` / muted green
+- **Warning/attention:** `amber-500` / restrained amber-gold (not red)
+
+Icons are `stone-300` (gray) when inactive; reminder color when due.
+
+## Typography
+- **Body/UI:** clean sans-serif (Inter or system-ui)
+- **Plant names/headings:** can use a subtle serif or editorial sans for plant names and genus/species — tasteful, not novelty
+- **Hierarchy:** clear levels, comfortable line spacing, never cramped
+- **Genus/species:** refined, slightly scientific — smaller text beneath plant name
+
+## Spacing & Layout
+- Generous whitespace — the UI should breathe
+- Consistent spacing rhythm (use Tailwind spacing scale)
+- Responsive layouts that never feel crowded
+- Comfortable padding in cards and panels
+- On mobile: prioritize vertical flow, keep actions obvious
+- On desktop: centered content, max-width constraint to avoid over-stretching
+
+## Surface Styling
+- Soft corners (`rounded-lg` or `rounded-xl`)
+- Thin borders (`border border-stone-200`)
+- Minimal shadow or extremely soft shadow (`shadow-sm` at most)
+- Clean section separation via spacing, not heavy dividers
+
+## Interaction Style
+- Gentle hover states (subtle background shift, not color explosion)
+- Quiet transitions (`transition-colors duration-150`)
+- Soft focus rings
+- Tasteful image transitions
+- No bouncing animations, no aggressive scaling, no flashy transitions
+
+## Page-Specific Direction
+
+**Plant list:** calm, elegant, easy to scan. Vertically scrollable, well-spaced rows, prioritize image + identity + reminder state. Cards feel like refined content rows, not buttons.
+
+**Plant detail:** premium plant journal / bio page. Prominent hero image, beautiful plant identity header, care panels with structured info, image strips, elegant scientific presentation. Immersive but simple.
+
+**Upload page:** welcoming and frictionless. Light and open, intentional — does not feel like a raw admin form.
+
+**Pruning flow:** careful and trustworthy. Communicate conservatism, encourage good photo capture, avoid implying certainty before analysis completes.
+
+**Screensaver:** beautiful and ambient. Minimal UI, elevate plant imagery, gallery/botanical display feel, restrained overlays.
+
+## Implementation Notes
+- Create reusable design tokens for colors, spacing, border-radius, typography
+- Keep system coherent across all pages
+- Prefer subtle visual refinement over decorative complexity
+- The app should look simple at first glance and thoughtfully crafted on closer inspection
