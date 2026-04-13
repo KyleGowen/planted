@@ -1,5 +1,6 @@
 package com.planted.worker;
 
+import com.planted.client.INaturalistClient;
 import com.planted.entity.Plant;
 import com.planted.entity.PlantAnalysis;
 import com.planted.entity.PlantImage;
@@ -14,11 +15,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
- * Fetches and stores healthy reference image URLs for the plant species.
- * Currently stores the search query as a URL-type reference — a future iteration
- * can integrate a real image search API (Unsplash, iNaturalist, etc.).
+ * Fetches and stores healthy reference image URLs for the plant species
+ * using the iNaturalist taxa API.
  */
 @Slf4j
 @Component
@@ -28,12 +30,13 @@ public class HealthyReferenceImageProcessor {
     private final PlantRepository plantRepository;
     private final PlantAnalysisRepository analysisRepository;
     private final PlantImageRepository imageRepository;
+    private final INaturalistClient iNaturalistClient;
 
     @Transactional
     public void process(PlantJobMessage message) {
         Long plantId = message.getPlantId();
 
-        Plant plant = plantRepository.findById(plantId)
+        plantRepository.findById(plantId)
                 .orElseThrow(() -> new IllegalArgumentException("Plant not found: " + plantId));
 
         PlantAnalysis analysis = analysisRepository
@@ -47,32 +50,31 @@ public class HealthyReferenceImageProcessor {
             return;
         }
 
-        String genus = analysis.getGenus();
-        String species = analysis.getSpecies() != null ? analysis.getSpecies() : "";
-        String speciesQuery = (genus + " " + species).trim().replace(" ", "+");
+        List<String> photoUrls = iNaturalistClient.fetchReferencePhotoUrls(
+                analysis.getGenus(), analysis.getSpecies());
 
-        // Store placeholder reference URLs pointing to iNaturalist-style searches
-        // These can be replaced with real fetched images in a future iteration
-        List<String> referenceUrls = List.of(
-                "https://www.inaturalist.org/taxa/search?q=" + speciesQuery,
-                "https://www.gbif.org/species/search?q=" + speciesQuery
-        );
+        if (photoUrls.isEmpty()) {
+            log.warn("No reference photos found for plant {} ({} {})",
+                    plantId, analysis.getGenus(), analysis.getSpecies());
+            return;
+        }
 
-        int sortOrder = 0;
-        for (String url : referenceUrls) {
-            boolean alreadyExists = imageRepository
-                    .findByPlantIdAndImageTypeOrderBySortOrderAscCreatedAtAsc(
-                            plantId, PlantImage.ImageType.HEALTHY_REFERENCE)
-                    .stream()
-                    .anyMatch(img -> img.getStoragePath().equals(url));
+        Set<String> existingPaths = imageRepository
+                .findByPlantIdAndImageTypeOrderBySortOrderAscCreatedAtAsc(
+                        plantId, PlantImage.ImageType.HEALTHY_REFERENCE)
+                .stream()
+                .map(PlantImage::getStoragePath)
+                .collect(Collectors.toSet());
 
-            if (!alreadyExists) {
+        int sortOrder = existingPaths.size();
+        for (String url : photoUrls) {
+            if (!existingPaths.contains(url)) {
                 PlantImage refImage = PlantImage.builder()
                         .plantId(plantId)
                         .imageType(PlantImage.ImageType.HEALTHY_REFERENCE)
                         .storageType(PlantImage.StorageType.URL)
                         .storagePath(url)
-                        .mimeType("text/html")
+                        .mimeType("image/jpeg")
                         .capturedAt(OffsetDateTime.now())
                         .sortOrder(sortOrder++)
                         .build();
@@ -80,6 +82,7 @@ public class HealthyReferenceImageProcessor {
             }
         }
 
-        log.info("Healthy reference images stored for plant {} ({})", plantId, genus + " " + species);
+        log.info("Stored {} reference photo(s) for plant {} ({} {})",
+                photoUrls.size(), plantId, analysis.getGenus(), analysis.getSpecies());
     }
 }

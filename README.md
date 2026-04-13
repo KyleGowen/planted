@@ -94,6 +94,21 @@ The frontend starts on `http://localhost:3000`.
 
 ---
 
+## UI Layout
+
+### Plant Detail Page (Bio Page)
+The plant detail page is a fixed-height, no-scroll landscape layout designed for web app use. It fills the full viewport (`100dvh`) with two columns:
+
+- **Left column (34%):** Hero photo (fills available height) → Reference + Photo history thumbnails → History observation input pinned to the bottom
+- **Right column (flex-1):** Name/species/location header → PlantStatusCard → About This Plant + Care panels side-by-side (both scroll internally, bottoms align with thumbnail row)
+
+The back link (`← All plants`) is absolutely positioned so it doesn't consume layout space.
+
+### Plant List Page
+Each list card thumbnail uses: `illustratedImage` → `originalImage` (user's own upload) → Sprout placeholder. Internet-sourced reference images (`HEALTHY_REFERENCE`) are never used as list thumbnails — the list shows only the user's personal photos.
+
+---
+
 ## Environment Variables
 
 ### Backend (application-local.yml defaults, override via env)
@@ -196,9 +211,9 @@ Prompt keys:
 
 ## Database Schema
 
-7 Flyway migrations in `backend/src/main/resources/db/migration/`:
+10 Flyway migrations in `backend/src/main/resources/db/migration/`:
 
-| Migration | Tables |
+| Migration | Tables / Changes |
 |---|---|
 | V1 | `plants` |
 | V2 | `plant_images` |
@@ -207,6 +222,9 @@ Prompt keys:
 | V5 | `plant_reminder_state` |
 | V6 | `llm_prompts` (with seeded prompt templates) |
 | V7 | `llm_requests` (audit log) |
+| V8 | `plants` geo columns (`geo_country`, `geo_state`, `geo_city`) |
+| V9 | `plant_history_entries` (timestamped observations with optional image) |
+| V10 | Updated prompt templates with care context |
 
 ---
 

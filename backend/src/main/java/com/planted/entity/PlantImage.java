@@ -63,7 +63,8 @@ public class PlantImage {
         ORIGINAL_UPLOAD,
         HEALTHY_REFERENCE,
         ILLUSTRATED,
-        PRUNE_UPDATE
+        PRUNE_UPDATE,
+        HISTORY_NOTE
     }
 
     public enum StorageType {

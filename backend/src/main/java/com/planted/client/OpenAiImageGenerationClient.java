@@ -73,6 +73,10 @@ public class OpenAiImageGenerationClient {
             JsonNode root = objectMapper.readTree(response);
             String b64 = root.path("data").get(0).path("b64_json").asText();
             return Base64.getDecoder().decode(b64);
+        } catch (org.springframework.web.reactive.function.client.WebClientResponseException e) {
+            log.error("Image generation failed for {} — status: {} body: {}",
+                    speciesName, e.getStatusCode(), e.getResponseBodyAsString());
+            throw new RuntimeException("Image generation failed: " + e.getMessage(), e);
         } catch (Exception e) {
             log.error("Image generation failed for {}", speciesName, e);
             throw new RuntimeException("Image generation failed: " + e.getMessage(), e);

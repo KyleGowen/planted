@@ -30,9 +30,9 @@ public class LocalImageStorageService implements ImageStorageService {
             String ext = getExtension(file.getOriginalFilename());
             String filename = UUID.randomUUID() + ext;
             String relativePath = "plants/" + plantId + "/" + filename;
-            Path fullPath = Paths.get(basePath, relativePath);
+            Path fullPath = resolveAbsolute(relativePath);
             Files.createDirectories(fullPath.getParent());
-            file.transferTo(fullPath.toFile());
+            file.transferTo(fullPath);
             log.info("Stored image locally at {}", fullPath);
             return relativePath;
         } catch (IOException e) {
@@ -44,7 +44,7 @@ public class LocalImageStorageService implements ImageStorageService {
     public String storeBytes(byte[] data, String filename, String mimeType, Long plantId) {
         try {
             String relativePath = "plants/" + plantId + "/" + filename;
-            Path fullPath = Paths.get(basePath, relativePath);
+            Path fullPath = resolveAbsolute(relativePath);
             Files.createDirectories(fullPath.getParent());
             Files.write(fullPath, data);
             log.info("Stored generated image locally at {}", fullPath);
@@ -54,8 +54,16 @@ public class LocalImageStorageService implements ImageStorageService {
         }
     }
 
+    private Path resolveAbsolute(String relativePath) {
+        return Paths.get(basePath).toAbsolutePath().normalize().resolve(relativePath);
+    }
+
     @Override
     public String getUrl(String storagePath, PlantImage.StorageType storageType) {
+        if (storageType == PlantImage.StorageType.URL) {
+            return storagePath;
+        }
+        // storagePath is relative (plants/{id}/file.jpg); served by /images/** resource handler
         return "http://localhost:" + serverPort + "/images/" + storagePath;
     }
 

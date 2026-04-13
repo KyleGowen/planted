@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @Slf4j
@@ -21,9 +22,15 @@ import java.util.*;
 @RequiredArgsConstructor
 public class PlantPruningProcessor {
 
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("MMMM d, yyyy");
+
     private final PlantRepository plantRepository;
     private final PlantAnalysisRepository analysisRepository;
     private final PlantImageRepository imageRepository;
+    private final PlantWateringEventRepository wateringEventRepository;
+    private final PlantFertilizerEventRepository fertilizerEventRepository;
+    private final PlantPruneEventRepository pruneEventRepository;
+    private final PlantHistoryEntryRepository historyEntryRepository;
     private final OpenAiPlantClient openAiClient;
 
     @Transactional
@@ -73,12 +80,16 @@ public class PlantPruningProcessor {
             String species = registrationAnalysis != null ? registrationAnalysis.getSpecies() : plant.getSpecies();
             String pruningGuidance = registrationAnalysis != null ? registrationAnalysis.getPruningGuidance() : null;
 
+            String careHistory = buildCareHistory(plantId);
+            String historyNotes = buildHistoryNotes(plantId);
+
             log.info("Running pruning analysis for plant {} with {} image(s)", plantId, imagesBase64.size());
 
             PruningAnalysisSchema result = openAiClient.analyzePruning(
                     imagesBase64, mimeTypes,
                     genus, species,
                     plant.getGoalsText(), pruningGuidance,
+                    careHistory, historyNotes,
                     plantId, analysisId);
 
             // Store result in pruning analysis record
@@ -107,5 +118,42 @@ public class PlantPruningProcessor {
             analysis.setFailureReason(e.getMessage());
             analysisRepository.save(analysis);
         }
+    }
+
+    private String buildCareHistory(Long plantId) {
+        String lastWatered = wateringEventRepository
+                .findFirstByPlantIdOrderByWateredAtDesc(plantId)
+                .map(e -> e.getWateredAt().format(DATE_FMT))
+                .orElse("Never recorded");
+
+        String lastFertilized = fertilizerEventRepository
+                .findFirstByPlantIdOrderByFertilizedAtDesc(plantId)
+                .map(e -> e.getFertilizedAt().format(DATE_FMT))
+                .orElse("Never recorded");
+
+        String lastPruned = pruneEventRepository
+                .findFirstByPlantIdOrderByPrunedAtDesc(plantId)
+                .map(e -> e.getPrunedAt().format(DATE_FMT))
+                .orElse("Never recorded");
+
+        return "Last watered: " + lastWatered + ". "
+                + "Last fertilized: " + lastFertilized + ". "
+                + "Last pruned: " + lastPruned + ".";
+    }
+
+    /**
+     * Builds a formatted string of the 5 most recent owner-written text history notes.
+     */
+    private String buildHistoryNotes(Long plantId) {
+        List<com.planted.entity.PlantHistoryEntry> notes =
+                historyEntryRepository.findTop5ByPlantIdAndNoteTextIsNotNullOrderByCreatedAtDesc(plantId);
+        if (notes.isEmpty()) return null;
+
+        StringBuilder sb = new StringBuilder();
+        for (com.planted.entity.PlantHistoryEntry note : notes) {
+            sb.append("- [").append(note.getCreatedAt().format(DATE_FMT)).append("] ")
+              .append(note.getNoteText()).append("\n");
+        }
+        return sb.toString().trim();
     }
 }

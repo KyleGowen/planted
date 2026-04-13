@@ -18,6 +18,8 @@ frontend/.env.local
 *.iml
 .vscode/
 
-# Env
+# Env / local secrets — NEVER commit these
 *.env
 .env.local
+backend/src/main/resources/application-local.yml
+backend/src/main/resources/application-local.properties

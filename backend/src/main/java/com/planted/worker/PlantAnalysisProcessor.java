@@ -9,13 +9,16 @@ import com.planted.repository.*;
 import com.planted.storage.ImageStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @Slf4j
@@ -23,9 +26,18 @@ import java.util.*;
 @RequiredArgsConstructor
 public class PlantAnalysisProcessor {
 
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("MMMM d, yyyy");
+
+    @Value("${planted.storage.local-path:./data/images}")
+    private String localStorageBasePath;
+
     private final PlantRepository plantRepository;
     private final PlantAnalysisRepository analysisRepository;
     private final PlantImageRepository imageRepository;
+    private final PlantWateringEventRepository wateringEventRepository;
+    private final PlantFertilizerEventRepository fertilizerEventRepository;
+    private final PlantPruneEventRepository pruneEventRepository;
+    private final PlantHistoryEntryRepository historyEntryRepository;
     private final OpenAiPlantClient openAiClient;
     private final PlantJobPublisher jobPublisher;
 
@@ -51,10 +63,21 @@ public class PlantAnalysisProcessor {
             String base64 = imageData[0];
             String mimeType = imageData[1];
 
+            // Gather prior care context from the most recent completed analysis (relevant for reanalysis)
+            String priorCareContext = buildPriorCareContext(plantId, analysisId);
+
+            // Gather care event history
+            String careHistory = buildCareHistory(plantId);
+
+            // Gather owner history notes
+            String historyNotes = buildHistoryNotes(plantId);
+
             log.info("Running registration analysis for plant {}, analysis {}", plantId, analysisId);
             PlantAnalysisSchema result = openAiClient.analyzeRegistration(
                     base64, mimeType,
                     plant.getGoalsText(), plant.getLocation(),
+                    plant.getName(), priorCareContext, careHistory, historyNotes,
+                    plant.getGeoCountry(), plant.getGeoState(), plant.getGeoCity(),
                     plantId, analysisId);
 
             // Write normalized fields
@@ -141,7 +164,9 @@ public class PlantAnalysisProcessor {
         try {
             byte[] bytes;
             if (image.getStorageType() == PlantImage.StorageType.LOCAL) {
-                bytes = Files.readAllBytes(Path.of("./data/images", image.getStoragePath()));
+                Path fullPath = Paths.get(localStorageBasePath).toAbsolutePath().normalize()
+                        .resolve(image.getStoragePath());
+                bytes = Files.readAllBytes(fullPath);
             } else {
                 throw new UnsupportedOperationException("S3 image loading in worker not yet implemented");
             }
@@ -157,5 +182,82 @@ public class PlantAnalysisProcessor {
         if (species == null) return genus;
         if (genus == null) return species;
         return genus + " " + species;
+    }
+
+    /**
+     * Builds a formatted care context string from the most recently completed analysis for this plant,
+     * excluding the analysis currently being processed. Used to give continuity on reanalysis.
+     */
+    private String buildPriorCareContext(Long plantId, Long currentAnalysisId) {
+        return analysisRepository
+                .findFirstByPlantIdAndAnalysisTypeInOrderByCreatedAtDesc(
+                        plantId,
+                        List.of(PlantAnalysis.AnalysisType.REGISTRATION, PlantAnalysis.AnalysisType.REANALYSIS))
+                .filter(a -> a.getStatus() == PlantAnalysis.AnalysisStatus.COMPLETED
+                        && !a.getId().equals(currentAnalysisId))
+                .map(a -> {
+                    StringBuilder sb = new StringBuilder();
+                    appendIfPresent(sb, "Light needs", a.getLightNeeds());
+                    appendIfPresent(sb, "Placement", a.getPlacementGuidance());
+                    appendIfPresent(sb, "Watering amount", a.getWateringAmount());
+                    appendIfPresent(sb, "Watering frequency", a.getWateringFrequency());
+                    appendIfPresent(sb, "Watering guidance", a.getWateringGuidance());
+                    appendIfPresent(sb, "Fertilizer type", a.getFertilizerType());
+                    appendIfPresent(sb, "Fertilizer frequency", a.getFertilizerFrequency());
+                    appendIfPresent(sb, "Fertilizer guidance", a.getFertilizerGuidance());
+                    appendIfPresent(sb, "Pruning guidance", a.getPruningGuidance());
+                    appendIfPresent(sb, "Health diagnosis", a.getHealthDiagnosis());
+                    appendIfPresent(sb, "Goal suggestions", a.getGoalSuggestions());
+                    return sb.toString().trim();
+                })
+                .filter(s -> !s.isEmpty())
+                .orElse(null);
+    }
+
+    /**
+     * Builds a formatted care history string from the most recent watering, fertilizer, and prune events.
+     */
+    private String buildCareHistory(Long plantId) {
+        String lastWatered = wateringEventRepository
+                .findFirstByPlantIdOrderByWateredAtDesc(plantId)
+                .map(e -> e.getWateredAt().format(DATE_FMT))
+                .orElse("Never recorded");
+
+        String lastFertilized = fertilizerEventRepository
+                .findFirstByPlantIdOrderByFertilizedAtDesc(plantId)
+                .map(e -> e.getFertilizedAt().format(DATE_FMT))
+                .orElse("Never recorded");
+
+        String lastPruned = pruneEventRepository
+                .findFirstByPlantIdOrderByPrunedAtDesc(plantId)
+                .map(e -> e.getPrunedAt().format(DATE_FMT))
+                .orElse("Never recorded");
+
+        return "Last watered: " + lastWatered + ". "
+                + "Last fertilized: " + lastFertilized + ". "
+                + "Last pruned: " + lastPruned + ".";
+    }
+
+    /**
+     * Builds a formatted string of the 5 most recent owner-written text history notes.
+     * Image-only entries are skipped since they cannot be rendered as text context.
+     */
+    private String buildHistoryNotes(Long plantId) {
+        List<com.planted.entity.PlantHistoryEntry> notes =
+                historyEntryRepository.findTop5ByPlantIdAndNoteTextIsNotNullOrderByCreatedAtDesc(plantId);
+        if (notes.isEmpty()) return null;
+
+        StringBuilder sb = new StringBuilder();
+        for (com.planted.entity.PlantHistoryEntry note : notes) {
+            sb.append("- [").append(note.getCreatedAt().format(DATE_FMT)).append("] ")
+              .append(note.getNoteText()).append("\n");
+        }
+        return sb.toString().trim();
+    }
+
+    private void appendIfPresent(StringBuilder sb, String label, String value) {
+        if (value != null && !value.isBlank()) {
+            sb.append(label).append(": ").append(value).append("\n");
+        }
     }
 }

@@ -21,6 +21,7 @@ public class PlantQueryService {
     private final PlantImageRepository imageRepository;
     private final PlantAnalysisRepository analysisRepository;
     private final PlantReminderStateRepository reminderStateRepository;
+    private final PlantHistoryEntryRepository historyEntryRepository;
     private final PlantMapper plantMapper;
 
     @Transactional(readOnly = true)
@@ -30,6 +31,11 @@ public class PlantQueryService {
                     PlantImage illustratedImage = imageRepository
                             .findFirstByPlantIdAndImageTypeOrderByCreatedAtDesc(
                                     plant.getId(), PlantImage.ImageType.ILLUSTRATED)
+                            .orElse(null);
+
+                    PlantImage originalImage = imageRepository
+                            .findFirstByPlantIdAndImageTypeOrderByCreatedAtDesc(
+                                    plant.getId(), PlantImage.ImageType.ORIGINAL_UPLOAD)
                             .orElse(null);
 
                     PlantReminderState reminderState = reminderStateRepository
@@ -42,7 +48,7 @@ public class PlantQueryService {
                             .map(a -> a.getStatus().name())
                             .orElse(null);
 
-                    return plantMapper.toListItemResponse(plant, illustratedImage, reminderState, analysisStatus);
+                    return plantMapper.toListItemResponse(plant, illustratedImage, originalImage, reminderState, analysisStatus);
                 })
                 .toList();
     }
@@ -66,7 +72,9 @@ public class PlantQueryService {
                 .findByPlantIdAndImageTypeOrderBySortOrderAscCreatedAtAsc(plantId, PlantImage.ImageType.PRUNE_UPDATE);
 
         PlantAnalysis latestAnalysis = analysisRepository
-                .findFirstByPlantIdAndAnalysisTypeOrderByCreatedAtDesc(plantId, PlantAnalysis.AnalysisType.REGISTRATION)
+                .findFirstByPlantIdAndAnalysisTypeInOrderByCreatedAtDesc(
+                        plantId,
+                        List.of(PlantAnalysis.AnalysisType.REGISTRATION, PlantAnalysis.AnalysisType.REANALYSIS))
                 .orElse(null);
 
         PlantReminderState reminderState = reminderStateRepository
@@ -79,6 +87,9 @@ public class PlantQueryService {
                         PlantAnalysis.AnalysisStatus.PROCESSING))
                 .isEmpty();
 
+        List<PlantHistoryEntry> historyEntries = historyEntryRepository
+                .findByPlantIdOrderByCreatedAtDesc(plantId);
+
         return plantMapper.toDetailResponse(
                 plant,
                 illustratedImage,
@@ -87,7 +98,8 @@ public class PlantQueryService {
                 pruneUpdateImages,
                 latestAnalysis,
                 reminderState,
-                hasActiveJobs
+                hasActiveJobs,
+                historyEntries
         );
     }
 }

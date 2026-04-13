@@ -15,6 +15,9 @@ public interface PlantAnalysisRepository extends JpaRepository<PlantAnalysis, Lo
     Optional<PlantAnalysis> findFirstByPlantIdAndAnalysisTypeOrderByCreatedAtDesc(
             Long plantId, PlantAnalysis.AnalysisType analysisType);
 
+    Optional<PlantAnalysis> findFirstByPlantIdAndAnalysisTypeInOrderByCreatedAtDesc(
+            Long plantId, List<PlantAnalysis.AnalysisType> analysisTypes);
+
     List<PlantAnalysis> findByPlantIdAndStatusIn(Long plantId, List<PlantAnalysis.AnalysisStatus> statuses);
 
     List<PlantAnalysis> findByStatus(PlantAnalysis.AnalysisStatus status);

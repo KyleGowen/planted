@@ -8,6 +8,7 @@ public record PlantListItemResponse(
         String speciesLabel,
         String displayLabel,
         PlantImageDto illustratedImage,
+        PlantImageDto originalImage,
         ReminderStateDto reminderState,
         String status,
         String analysisStatus

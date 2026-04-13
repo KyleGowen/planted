@@ -32,6 +32,10 @@ Next.js 14 (App Router), TypeScript, Tailwind CSS, shadcn/ui, TanStack Query (Re
 - `useMutation` for upload, recording events, archive/restore
 - Invalidate relevant queries after mutations
 
+## List Page Image Rules
+- The `PlantListItemCard` thumbnail priority: `illustratedImage` → `originalImage` (user's uploaded photo) → Sprout placeholder
+- Never use `healthyReferenceImage` as a list thumbnail — reference images are internet sourced and impersonal; only the user's own uploads appear in list cards
+
 ## Technical Standards
 - Keep API integrations isolated in `src/lib/api.ts` — typed functions per endpoint
 - Use shared types in `src/types/plant.ts` mirroring backend DTOs exactly

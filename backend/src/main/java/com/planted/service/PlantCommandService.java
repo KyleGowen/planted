@@ -32,6 +32,7 @@ public class PlantCommandService {
     private final PlantFertilizerEventRepository fertilizerEventRepository;
     private final PlantPruneEventRepository pruneEventRepository;
     private final PlantReminderStateRepository reminderStateRepository;
+    private final PlantHistoryEntryRepository historyEntryRepository;
     private final ImageStorageService imageStorageService;
     private final PlantJobPublisher jobPublisher;
 
@@ -41,7 +42,10 @@ public class PlantCommandService {
             String name,
             String location,
             String goalsText,
-            OffsetDateTime lastWateredAt) {
+            OffsetDateTime lastWateredAt,
+            String geoCountry,
+            String geoState,
+            String geoCity) {
 
         validateImageFile(imageFile);
 
@@ -50,6 +54,9 @@ public class PlantCommandService {
                 .name(name)
                 .location(location)
                 .goalsText(goalsText)
+                .geoCountry(geoCountry)
+                .geoState(geoState)
+                .geoCity(geoCity)
                 .status(PlantStatus.ACTIVE)
                 .build();
         plant = plantRepository.save(plant);
@@ -240,6 +247,76 @@ public class PlantCommandService {
                 imageIds.size(),
                 analysis.getCreatedAt()
         );
+    }
+
+    @Transactional
+    public void updatePlantName(Long plantId, String name) {
+        Plant plant = findActivePlant(plantId);
+        String trimmed = (name != null) ? name.trim() : null;
+        plant.setName((trimmed == null || trimmed.isEmpty()) ? null : trimmed);
+        plantRepository.save(plant);
+        log.info("Plant name updated: id={}, name={}", plantId, plant.getName());
+    }
+
+    @Transactional
+    public RequestReanalysisResponse requestReanalysis(Long plantId) {
+        findActivePlant(plantId);
+
+        PlantAnalysis analysis = PlantAnalysis.builder()
+                .plantId(plantId)
+                .analysisType(PlantAnalysis.AnalysisType.REANALYSIS)
+                .status(PlantAnalysis.AnalysisStatus.PENDING)
+                .build();
+        analysis = plantAnalysisRepository.save(analysis);
+
+        jobPublisher.publish(PlantJobMessage.builder()
+                .jobType(PlantJobMessage.JobType.PLANT_REANALYSIS)
+                .plantId(plantId)
+                .analysisId(analysis.getId())
+                .build());
+
+        log.info("Reanalysis requested for plant {}, analysisId={}", plantId, analysis.getId());
+
+        return new RequestReanalysisResponse(analysis.getId(), plantId, analysis.getStatus().name(), analysis.getCreatedAt());
+    }
+
+    @Transactional
+    public void addHistoryNote(Long plantId, AddHistoryNoteRequest request) {
+        findActivePlant(plantId);
+        PlantHistoryEntry entry = PlantHistoryEntry.builder()
+                .plantId(plantId)
+                .noteText(request.noteText().trim())
+                .build();
+        historyEntryRepository.save(entry);
+        log.info("History note added for plant {}", plantId);
+    }
+
+    @Transactional
+    public void addHistoryImage(Long plantId, MultipartFile imageFile, String noteText) {
+        findActivePlant(plantId);
+        validateImageFile(imageFile);
+
+        String storagePath = imageStorageService.store(imageFile, plantId);
+        PlantImage image = PlantImage.builder()
+                .plantId(plantId)
+                .imageType(PlantImage.ImageType.HISTORY_NOTE)
+                .storageType(imageStorageService.getStorageType())
+                .storagePath(storagePath)
+                .mimeType(imageFile.getContentType())
+                .originalFilename(imageFile.getOriginalFilename())
+                .capturedAt(OffsetDateTime.now())
+                .sortOrder(0)
+                .build();
+        image = plantImageRepository.save(image);
+
+        String trimmedNote = (noteText != null && !noteText.isBlank()) ? noteText.trim() : null;
+        PlantHistoryEntry entry = PlantHistoryEntry.builder()
+                .plantId(plantId)
+                .imageId(image.getId())
+                .noteText(trimmedNote)
+                .build();
+        historyEntryRepository.save(entry);
+        log.info("History image added for plant {}", plantId);
     }
 
     @Transactional

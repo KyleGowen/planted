@@ -5,9 +5,10 @@ import com.planted.queue.PlantJobEvent;
 import com.planted.queue.PlantJobMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
  * Routes background jobs to the correct processor.
@@ -29,10 +30,11 @@ public class PlantJobWorker {
 
     /**
      * Local dev: listens for Spring application events from LocalPlantJobPublisher.
-     * Runs async so the HTTP request thread is not blocked.
+     * AFTER_COMMIT ensures the publishing transaction has fully committed before the
+     * worker tries to load plant/analysis records — avoids "not found" race conditions.
      */
     @Async("plantJobExecutor")
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onLocalJobEvent(PlantJobEvent event) {
         process(event.getMessage());
     }

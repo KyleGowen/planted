@@ -31,6 +31,15 @@ public class Plant {
     @Column(name = "location")
     private String location;
 
+    @Column(name = "geo_country")
+    private String geoCountry;
+
+    @Column(name = "geo_state")
+    private String geoState;
+
+    @Column(name = "geo_city")
+    private String geoCity;
+
     @Column(name = "goals_text", columnDefinition = "TEXT")
     private String goalsText;
 

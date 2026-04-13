@@ -2,6 +2,7 @@ package com.planted.mapper;
 
 import com.planted.dto.*;
 import com.planted.entity.*;
+import com.planted.repository.PlantImageRepository;
 import com.planted.storage.ImageStorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -13,6 +14,7 @@ import java.util.List;
 public class PlantMapper {
 
     private final ImageStorageService imageStorageService;
+    private final PlantImageRepository plantImageRepository;
 
     public PlantImageDto toImageDto(PlantImage image) {
         if (image == null) return null;
@@ -73,9 +75,21 @@ public class PlantMapper {
         );
     }
 
+    public PlantHistoryEntryDto toHistoryEntryDto(PlantHistoryEntry entry) {
+        if (entry == null) return null;
+        PlantImageDto imageDto = null;
+        if (entry.getImageId() != null) {
+            imageDto = plantImageRepository.findById(entry.getImageId())
+                    .map(this::toImageDto)
+                    .orElse(null);
+        }
+        return new PlantHistoryEntryDto(entry.getId(), entry.getNoteText(), imageDto, entry.getCreatedAt());
+    }
+
     public PlantListItemResponse toListItemResponse(
             Plant plant,
             PlantImage illustratedImage,
+            PlantImage originalImage,
             PlantReminderState reminderState,
             String analysisStatus) {
 
@@ -92,6 +106,7 @@ public class PlantMapper {
                 plant.getSpeciesLabel(),
                 displayLabel,
                 toImageDto(illustratedImage),
+                toImageDto(originalImage),
                 toReminderStateDto(reminderState),
                 plant.getStatus().name(),
                 analysisStatus
@@ -106,7 +121,8 @@ public class PlantMapper {
             List<PlantImage> pruneUpdateImages,
             PlantAnalysis latestAnalysis,
             PlantReminderState reminderState,
-            boolean hasActiveJobs) {
+            boolean hasActiveJobs,
+            List<PlantHistoryEntry> historyEntries) {
 
         return new PlantDetailResponse(
                 plant.getId(),
@@ -117,6 +133,9 @@ public class PlantMapper {
                 plant.getSpeciesLabel(),
                 plant.getLocation(),
                 plant.getGoalsText(),
+                plant.getGeoCountry(),
+                plant.getGeoState(),
+                plant.getGeoCity(),
                 plant.getStatus().name(),
                 toImageDto(illustratedImage),
                 originalImages.stream().map(this::toImageDto).toList(),
@@ -125,6 +144,7 @@ public class PlantMapper {
                 toAnalysisSummaryDto(latestAnalysis),
                 toReminderStateDto(reminderState),
                 hasActiveJobs,
+                historyEntries.stream().map(this::toHistoryEntryDto).toList(),
                 plant.getCreatedAt(),
                 plant.getUpdatedAt()
         );

@@ -29,10 +29,14 @@ public class PlantController {
             @RequestPart(value = "name", required = false) String name,
             @RequestPart(value = "location", required = false) String location,
             @RequestPart(value = "goalsText", required = false) String goalsText,
-            @RequestPart(value = "lastWateredAt", required = false) String lastWateredAt) {
+            @RequestPart(value = "lastWateredAt", required = false) String lastWateredAt,
+            @RequestPart(value = "geoCountry", required = false) String geoCountry,
+            @RequestPart(value = "geoState", required = false) String geoState,
+            @RequestPart(value = "geoCity", required = false) String geoCity) {
 
         OffsetDateTime lastWatered = lastWateredAt != null ? OffsetDateTime.parse(lastWateredAt) : null;
-        CreatePlantResponse response = commandService.registerPlant(image, name, location, goalsText, lastWatered);
+        CreatePlantResponse response = commandService.registerPlant(
+                image, name, location, goalsText, lastWatered, geoCountry, geoState, geoCity);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 
@@ -78,6 +82,37 @@ public class PlantController {
             @PathVariable Long id,
             @RequestPart("images") List<MultipartFile> images) {
         RequestPruningAnalysisResponse response = commandService.requestPruningAnalysis(id, images);
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
+    }
+
+    @PatchMapping("/{id}/name")
+    public ResponseEntity<Void> updatePlantName(
+            @PathVariable Long id,
+            @RequestBody UpdatePlantNameRequest request) {
+        commandService.updatePlantName(id, request.name());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/history")
+    public ResponseEntity<Void> addHistoryNote(
+            @PathVariable Long id,
+            @Valid @RequestBody AddHistoryNoteRequest request) {
+        commandService.addHistoryNote(id, request);
+        return ResponseEntity.status(HttpStatus.CREATED).build();
+    }
+
+    @PostMapping(value = "/{id}/history/image", consumes = "multipart/form-data")
+    public ResponseEntity<Void> addHistoryImage(
+            @PathVariable Long id,
+            @RequestPart("image") MultipartFile image,
+            @RequestPart(value = "noteText", required = false) String noteText) {
+        commandService.addHistoryImage(id, image, noteText);
+        return ResponseEntity.status(HttpStatus.CREATED).build();
+    }
+
+    @PostMapping("/{id}/reanalysis")
+    public ResponseEntity<RequestReanalysisResponse> requestReanalysis(@PathVariable Long id) {
+        RequestReanalysisResponse response = commandService.requestReanalysis(id);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 

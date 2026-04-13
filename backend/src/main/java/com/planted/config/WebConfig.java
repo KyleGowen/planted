@@ -2,10 +2,11 @@ package com.planted.config;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+import java.nio.file.Paths;
 
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
@@ -16,16 +17,16 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")
-                .allowedOrigins("http://localhost:3000", "https://*.vercel.app")
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                .allowedOriginPatterns("http://localhost:3000", "https://*.vercel.app")
+                .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true);
     }
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        // Serve local images at /images/** in local dev
+        String absolutePath = Paths.get(localImageBasePath).toAbsolutePath().normalize().toString();
         registry.addResourceHandler("/images/**")
-                .addResourceLocations("file:" + localImageBasePath + "/");
+                .addResourceLocations("file:" + absolutePath + "/");
     }
 }

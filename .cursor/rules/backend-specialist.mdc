@@ -34,6 +34,11 @@ com.planted.
   reminder/      # reminder computation logic
 ```
 
+## PlantListItemResponse Contract
+- `illustratedImage` — AI-generated botanical illustration (preferred thumbnail)
+- `originalImage` — user's own uploaded photo (fallback thumbnail); always `ORIGINAL_UPLOAD` type
+- **Never** include `healthyReferenceImage` in list responses — reference images are internet-sourced and must not appear in user-facing list cards
+
 ## Data Rules
 - Normalize high-value app fields into columns on `plant_analyses`
 - Store raw model output in `rawModelResponseJsonb JSONB`

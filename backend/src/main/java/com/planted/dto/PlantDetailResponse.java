@@ -12,6 +12,9 @@ public record PlantDetailResponse(
         String speciesLabel,
         String location,
         String goalsText,
+        String geoCountry,
+        String geoState,
+        String geoCity,
         String status,
         PlantImageDto illustratedImage,
         List<PlantImageDto> originalImages,
@@ -20,6 +23,7 @@ public record PlantDetailResponse(
         AnalysisSummaryDto latestAnalysis,
         ReminderStateDto reminderState,
         boolean hasActiveJobs,
+        List<PlantHistoryEntryDto> historyEntries,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt
 ) {}
