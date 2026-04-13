@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.*;
+import java.util.LinkedHashMap;
 
 /**
  * Client for the OpenAI Responses API.
@@ -235,33 +236,34 @@ public class OpenAiPlantClient {
     }
 
     private Map<String, Object> registrationSchema() {
-        return Map.of(
-                "type", "object",
-                "properties", Map.of(
-                        "className", Map.of("type", "string"),
-                        "genus", Map.of("type", "string"),
-                        "species", Map.of("type", "string"),
-                        "variety", Map.of("type", "string"),
-                        "scientificName", Map.of("type", "string"),
-                        "confidence", Map.of("type", "string", "enum", List.of("HIGH", "MEDIUM", "LOW", "UNCERTAIN")),
-                        "nativeRegions", Map.of("type", "array", "items", Map.of("type", "string")),
-                        "lightNeeds", Map.of("type", "string"),
-                        "placementGuidance", Map.of("type", "string"),
-                        "wateringAmount", Map.of("type", "string"),
-                        "wateringFrequency", Map.of("type", "string"),
-                        "wateringGuidance", Map.of("type", "string"),
-                        "fertilizerType", Map.of("type", "string"),
-                        "fertilizerFrequency", Map.of("type", "string"),
-                        "fertilizerGuidance", Map.of("type", "string"),
-                        "pruningGuidance", Map.of("type", "string"),
-                        "propagationInstructions", Map.of("type", "string"),
-                        "healthDiagnosis", Map.of("type", "string"),
-                        "goalSuggestions", Map.of("type", "string"),
-                        "interestingFacts", Map.of("type", "array", "items", Map.of("type", "string")),
-                        "uses", Map.of("type", "array", "items", Map.of("type", "string"))
-                ),
-                "required", List.of("genus", "species", "confidence")
-        );
+        Map<String, Object> properties = new LinkedHashMap<>();
+        properties.put("className", Map.of("type", "string"));
+        properties.put("genus", Map.of("type", "string"));
+        properties.put("species", Map.of("type", "string"));
+        properties.put("variety", Map.of("type", "string"));
+        properties.put("scientificName", Map.of("type", "string"));
+        properties.put("confidence", Map.of("type", "string"));
+        properties.put("nativeRegions", Map.of("type", "array", "items", Map.of("type", "string")));
+        properties.put("lightNeeds", Map.of("type", "string"));
+        properties.put("placementGuidance", Map.of("type", "string"));
+        properties.put("wateringAmount", Map.of("type", "string"));
+        properties.put("wateringFrequency", Map.of("type", "string"));
+        properties.put("wateringGuidance", Map.of("type", "string"));
+        properties.put("fertilizerType", Map.of("type", "string"));
+        properties.put("fertilizerFrequency", Map.of("type", "string"));
+        properties.put("fertilizerGuidance", Map.of("type", "string"));
+        properties.put("pruningGuidance", Map.of("type", "string"));
+        properties.put("propagationInstructions", Map.of("type", "string"));
+        properties.put("healthDiagnosis", Map.of("type", "string"));
+        properties.put("goalSuggestions", Map.of("type", "string"));
+        properties.put("interestingFacts", Map.of("type", "array", "items", Map.of("type", "string")));
+        properties.put("uses", Map.of("type", "array", "items", Map.of("type", "string")));
+
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("type", "object");
+        schema.put("properties", properties);
+        schema.put("required", List.of("genus", "species", "confidence"));
+        return schema;
     }
 
     private Map<String, Object> pruningSchema() {

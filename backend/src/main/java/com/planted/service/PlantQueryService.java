@@ -73,11 +73,11 @@ public class PlantQueryService {
                 .findByPlantId(plantId)
                 .orElse(null);
 
-        boolean hasActiveJobs = analysisRepository
+        boolean hasActiveJobs = !analysisRepository
                 .findByPlantIdAndStatusIn(plantId, List.of(
                         PlantAnalysis.AnalysisStatus.PENDING,
                         PlantAnalysis.AnalysisStatus.PROCESSING))
-                .stream().anyMatch(_ -> true);
+                .isEmpty();
 
         return plantMapper.toDetailResponse(
                 plant,

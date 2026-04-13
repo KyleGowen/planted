@@ -33,7 +33,7 @@ spring:
       on-profile: local
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/planted_db
+    url: jdbc:postgresql://localhost:5434/planted_db
     username: planted
     password: planted
     driver-class-name: org.postgresql.Driver
