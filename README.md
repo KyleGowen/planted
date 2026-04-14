@@ -182,8 +182,10 @@ The recompute logic in `PlantReminderService`:
 1. Reads the latest completed `PlantAnalysis` for watering/fertilizer/pruning frequency
 2. Reads the most recent care event from each history table
 3. Computes days elapsed vs frequency → sets `wateringDue`, `fertilizerDue`, `pruningDue`
-4. Generates plain-language next-step instructions
+4. Generates plain-language next-step instructions (pruning line prefers `pruning_action_summary`, then legacy `pruning_guidance`, then `pruning_general_guidance`)
 5. Upserts `PlantReminderState`
+
+Registration and reanalysis persist **paired care text** for the UI: short primary lines plus separate general guidance for light (`light_needs` / `light_general_guidance`), placement (`placement_guidance` / `placement_general_guidance`), and pruning (`pruning_action_summary` / `pruning_general_guidance`). The API exposes these on `latestAnalysis` (`AnalysisSummaryDto`). Existing analyses only gain the new gray lines after a new registration or reanalysis.
 
 ---
 
@@ -229,7 +231,7 @@ For local dev, the `LocalPlantJobPublisher` publishes Spring `ApplicationEvent`s
 Prompts are versioned in the `llm_prompts` table (seeded by `V6__create_llm_prompts.sql`). Every OpenAI call is audited in `llm_requests` with the rendered prompt and response — enabling full debuggability and future prompt iteration without losing history.
 
 Prompt keys:
-- `plant_registration_analysis_v1` — species ID + care guidance
+- `plant_registration_analysis_v1` — species ID + care guidance (versioned in DB; current seed includes layered light/placement/pruning fields matching structured JSON schema)
 - `plant_info_panel_v1` — species facts, history, uses
 - `plant_reminder_recompute_v1` — care scheduling
 - `pruning_analysis_v1` — conservative pruning guidance from photos
@@ -238,7 +240,7 @@ Prompt keys:
 
 ## Database Schema
 
-Versioned SQL migrations live in `backend/src/main/resources/db/migration/` (`V__*.sql`). Flyway applies them on startup. See that directory for the current set (plants, images, analyses, events, reminders, LLM audit, history, species overview, history summary, etc.).
+Versioned SQL migrations live in `backend/src/main/resources/db/migration/` (`V__*.sql`). Flyway applies them on startup. See that directory for the current set (plants, images, analyses—including paired care guidance columns on `plant_analyses`, events, reminders, LLM audit, history, species overview, history summary, etc.).
 
 ---
 

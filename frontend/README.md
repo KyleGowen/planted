@@ -31,6 +31,8 @@ Stay on **HTTP** on the LAN (`http://<IP>:3000`). Do **not** open WAN port forwa
 
 Repo-level overview: **[../README.md](../README.md)** (architecture + ship checklist). Helper script: **`../scripts/planted-lan-dev.sh`**.
 
+The plant detail **Care** panel shows a short primary line plus gray educational text for watering, fertilizer, pruning, light, and placement when the backend provides the matching `latestAnalysis` fields (pruning/light/placement general lines appear after registration or reanalysis with the current schema).
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

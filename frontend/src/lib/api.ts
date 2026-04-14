@@ -9,6 +9,7 @@ import type {
   RequestPruningAnalysisResponse,
   RequestReanalysisResponse,
 } from "@/types/plant";
+import type { UserLocationResponse } from "@/types/user";
 
 /**
  * In development, omit the host so requests stay same-origin (e.g. http://192.168.x.x:3000/api/...).
@@ -67,6 +68,22 @@ export async function registerPlant(formData: FormData): Promise<CreatePlantResp
 
 export async function listPlants(): Promise<PlantListItemResponse[]> {
   return apiFetch<PlantListItemResponse[]>("/api/plants");
+}
+
+// ── User location (climate context for care prompts) ────────────────────────
+
+export async function getUserLocation(): Promise<UserLocationResponse> {
+  return apiFetch<UserLocationResponse>("/api/user/location");
+}
+
+export async function putUserLocation(body: {
+  address: string | null;
+}): Promise<UserLocationResponse> {
+  return apiFetch<UserLocationResponse>("/api/user/location", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 }
 
 export async function getPlant(id: number): Promise<PlantDetailResponse> {

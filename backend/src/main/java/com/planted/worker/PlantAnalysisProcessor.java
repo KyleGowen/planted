@@ -6,6 +6,7 @@ import com.planted.entity.*;
 import com.planted.queue.PlantJobMessage;
 import com.planted.queue.PlantJobPublisher;
 import com.planted.repository.*;
+import com.planted.service.UserPhysicalAddressService;
 import com.planted.storage.ImageStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,6 +41,7 @@ public class PlantAnalysisProcessor {
     private final PlantHistoryEntryRepository historyEntryRepository;
     private final OpenAiPlantClient openAiClient;
     private final PlantJobPublisher jobPublisher;
+    private final UserPhysicalAddressService userPhysicalAddressService;
 
     @Transactional
     public void process(PlantJobMessage message) {
@@ -73,11 +75,14 @@ public class PlantAnalysisProcessor {
             String historyNotes = buildHistoryNotes(plantId);
 
             log.info("Running registration analysis for plant {}, analysis {}", plantId, analysisId);
+            String ownerAddress = userPhysicalAddressService.resolveAddressForPlant(plant)
+                    .orElse(null);
             PlantAnalysisSchema result = openAiClient.analyzeRegistration(
                     base64, mimeType,
                     plant.getGoalsText(), plant.getLocation(),
                     plant.getName(), priorCareContext, careHistory, historyNotes,
                     plant.getGeoCountry(), plant.getGeoState(), plant.getGeoCity(),
+                    ownerAddress,
                     plantId, analysisId);
 
             // Write normalized fields

@@ -5,6 +5,7 @@ import com.planted.client.PruningAnalysisSchema;
 import com.planted.entity.*;
 import com.planted.queue.PlantJobMessage;
 import com.planted.repository.*;
+import com.planted.service.UserPhysicalAddressService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -32,6 +33,7 @@ public class PlantPruningProcessor {
     private final PlantPruneEventRepository pruneEventRepository;
     private final PlantHistoryEntryRepository historyEntryRepository;
     private final OpenAiPlantClient openAiClient;
+    private final UserPhysicalAddressService userPhysicalAddressService;
 
     @Transactional
     public void process(PlantJobMessage message) {
@@ -85,11 +87,14 @@ public class PlantPruningProcessor {
 
             log.info("Running pruning analysis for plant {} with {} image(s)", plantId, imagesBase64.size());
 
+            String ownerAddress = userPhysicalAddressService.resolveAddressForPlant(plant)
+                    .orElse(null);
             PruningAnalysisSchema result = openAiClient.analyzePruning(
                     imagesBase64, mimeTypes,
                     genus, species,
                     plant.getGoalsText(), pruningGuidance,
                     careHistory, historyNotes,
+                    ownerAddress,
                     plantId, analysisId);
 
             // Store result in pruning analysis record

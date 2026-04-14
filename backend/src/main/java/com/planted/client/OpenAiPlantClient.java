@@ -53,15 +53,17 @@ public class OpenAiPlantClient {
      * @param historyNotes     optional formatted owner observations from plant history entries
      * @param geoCountry       optional geographic country for climate-aware care recommendations
      * @param geoState         optional geographic state/region for climate-aware care recommendations
-     * @param geoCity          optional geographic city for climate-aware care recommendations
-     * @param plantId          for audit logging
-     * @param analysisId       for audit logging
+     * @param geoCity               optional geographic city for climate-aware care recommendations
+     * @param ownerPhysicalAddress optional owner's home / growing-site address for regional climate context
+     * @param plantId               for audit logging
+     * @param analysisId            for audit logging
      */
     public PlantAnalysisSchema analyzeRegistration(
             String imageBase64, String mimeType,
             String goalsText, String location,
             String plantName, String priorCareContext, String careHistory, String historyNotes,
             String geoCountry, String geoState, String geoCity,
+            String ownerPhysicalAddress,
             Long plantId, Long analysisId) {
 
         String promptKey = "plant_registration_analysis_v1";
@@ -77,6 +79,7 @@ public class OpenAiPlantClient {
         templateVars.put("care_history", Optional.ofNullable(careHistory).orElse(""));
         templateVars.put("history_notes", Optional.ofNullable(historyNotes).orElse(""));
         templateVars.put("geographic_location", Optional.ofNullable(geographicLocation).orElse(""));
+        templateVars.put("owner_physical_address", Optional.ofNullable(ownerPhysicalAddress).orElse(""));
         String userPrompt = renderUserPrompt(promptKey, templateVars);
 
         Map<String, Object> inputVariables = new HashMap<>();
@@ -87,6 +90,7 @@ public class OpenAiPlantClient {
         inputVariables.put("care_history", careHistory);
         inputVariables.put("history_notes", historyNotes);
         inputVariables.put("geographic_location", geographicLocation);
+        inputVariables.put("owner_physical_address", ownerPhysicalAddress);
 
         String responseText = callWithImage(systemPrompt, userPrompt, imageBase64, mimeType,
                 promptKey, inputVariables, plantId, analysisId, registrationSchema());
@@ -113,6 +117,7 @@ public class OpenAiPlantClient {
             String genus, String species,
             String goalsText, String pruningGuidance,
             String careHistory, String historyNotes,
+            String ownerPhysicalAddress,
             Long plantId, Long analysisId) {
 
         String promptKey = "pruning_analysis_v1";
@@ -126,6 +131,7 @@ public class OpenAiPlantClient {
         templateVars.put("pruning_guidance", Optional.ofNullable(pruningGuidance).orElse(""));
         templateVars.put("care_history", Optional.ofNullable(careHistory).orElse(""));
         templateVars.put("history_notes", Optional.ofNullable(historyNotes).orElse(""));
+        templateVars.put("owner_physical_address", Optional.ofNullable(ownerPhysicalAddress).orElse(""));
         String userPrompt = renderUserPrompt(promptKey, templateVars);
 
         Map<String, Object> inputVariables = new HashMap<>();
@@ -133,8 +139,10 @@ public class OpenAiPlantClient {
         inputVariables.put("species", species);
         inputVariables.put("goals_text", goalsText);
         inputVariables.put("image_count", imagesBase64.size());
+        inputVariables.put("pruning_guidance", pruningGuidance);
         inputVariables.put("care_history", careHistory);
         inputVariables.put("history_notes", historyNotes);
+        inputVariables.put("owner_physical_address", ownerPhysicalAddress);
 
         String responseText = callWithImages(systemPrompt, userPrompt, imagesBase64, mimeTypes,
                 promptKey, inputVariables, plantId, analysisId, pruningSchema());
@@ -154,7 +162,8 @@ public class OpenAiPlantClient {
      *
      * @param plantProfile   placement, goals, geo, and latest care-analysis snapshot (may be blank)
      * @param baselinePhotoNote optional note when baseline image could not be attached (e.g. S3)
-     * @param imagesBase64   vision images in prompt order: baseline first (if any), then journal photos
+     * @param imagesBase64          vision images in prompt order: baseline first (if any), then journal photos
+     * @param ownerPhysicalAddress optional owner's address for typical climate context only
      */
     public PlantHistorySummarySchema summarizePlantHistory(
             String plantProfile,
@@ -163,6 +172,7 @@ public class OpenAiPlantClient {
             String plantName,
             String speciesLabel,
             String imageCountLabel,
+            String ownerPhysicalAddress,
             List<String> imagesBase64,
             List<String> mimeTypes,
             Long plantId,
@@ -183,6 +193,7 @@ public class OpenAiPlantClient {
         templateVars.put("species_label", Optional.ofNullable(speciesLabel).orElse(""));
         templateVars.put("timeline_text", timelineText != null ? timelineText : "");
         templateVars.put("image_count", Optional.ofNullable(imageCountLabel).orElse(""));
+        templateVars.put("owner_physical_address", Optional.ofNullable(ownerPhysicalAddress).orElse(""));
         String userPrompt = renderUserPrompt(promptKey, templateVars);
 
         Map<String, Object> inputVariables = new HashMap<>();
@@ -192,6 +203,7 @@ public class OpenAiPlantClient {
         inputVariables.put("species_label", speciesLabel);
         inputVariables.put("timeline_text", timelineText);
         inputVariables.put("image_count", imageCountLabel);
+        inputVariables.put("owner_physical_address", ownerPhysicalAddress);
 
         List<String> safeImages = imagesBase64 != null ? imagesBase64 : List.of();
         List<String> safeMimes = mimeTypes != null ? mimeTypes : List.of();

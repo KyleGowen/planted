@@ -6,6 +6,7 @@ import com.planted.entity.*;
 import com.planted.queue.PlantJobMessage;
 import com.planted.repository.*;
 import com.planted.service.PlantHistorySummaryPersistenceHelper;
+import com.planted.service.UserPhysicalAddressService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -40,6 +41,7 @@ public class PlantHistorySummaryProcessor {
     private final PlantPruneEventRepository pruneEventRepository;
     private final OpenAiPlantClient openAiClient;
     private final PlantHistorySummaryPersistenceHelper persistenceHelper;
+    private final UserPhysicalAddressService userPhysicalAddressService;
 
     public void process(PlantJobMessage message) {
         Long plantId = message.getPlantId();
@@ -114,6 +116,8 @@ public class PlantHistorySummaryProcessor {
             log.info("Running plant history summary for plant {} ({} image(s) to model)",
                     plantId, imagesBase64.size());
 
+            String ownerAddress = userPhysicalAddressService.resolveAddressForPlant(plant)
+                    .orElse(null);
             PlantHistorySummarySchema result = openAiClient.summarizePlantHistory(
                     plantProfile,
                     baselineResult.baselinePhotoNote(),
@@ -121,6 +125,7 @@ public class PlantHistorySummaryProcessor {
                     plant.getName(),
                     speciesLabel,
                     imageCountLabel,
+                    ownerAddress,
                     imagesBase64,
                     mimeTypes,
                     plantId,

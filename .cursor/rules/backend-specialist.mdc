@@ -45,6 +45,7 @@ com.planted.
 
 ## Data Rules
 - Normalize high-value app fields into columns on `plant_analyses`
+- Registration structured output includes paired strings for light, placement, and pruning (primary + `*GeneralGuidance` / `pruningActionSummary` + `pruningGeneralGuidance`); `latestAnalysis` in plant detail mirrors `AnalysisSummaryDto`
 - Store raw model output in `rawModelResponseJsonb JSONB`
 - Histories (`watering`, `fertilizer`, `prune`) are first-class tables, not embedded JSON
 - Analysis status lifecycle: `PENDING → PROCESSING → COMPLETED | FAILED`
