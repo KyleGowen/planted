@@ -31,6 +31,30 @@ logging:
   level:
     com.planted: INFO
 
+planted:
+  cors:
+    allowed-origin-patterns:
+      - "http://localhost:3000"
+      - "https://*.vercel.app"
+      - "http://192.168.*.*:3000"
+      - "http://10.*.*.*:3000"
+      - "http://172.16.*.*:3000"
+      - "http://172.17.*.*:3000"
+      - "http://172.18.*.*:3000"
+      - "http://172.19.*.*:3000"
+      - "http://172.20.*.*:3000"
+      - "http://172.21.*.*:3000"
+      - "http://172.22.*.*:3000"
+      - "http://172.23.*.*:3000"
+      - "http://172.24.*.*:3000"
+      - "http://172.25.*.*:3000"
+      - "http://172.26.*.*:3000"
+      - "http://172.27.*.*:3000"
+      - "http://172.28.*.*:3000"
+      - "http://172.29.*.*:3000"
+      - "http://172.30.*.*:3000"
+      - "http://172.31.*.*:3000"
+
 ---
 spring:
   config:
@@ -47,8 +71,11 @@ planted:
   storage:
     type: local
     local-path: ./data/images
+    # Optional: absolute image URLs for clients that call Spring directly. Leave unset when the UI proxies /images (Next dev).
+    # public-base-url: http://192.168.1.10:8080
   queue:
     type: local
+  # Must be set for the JVM that runs Spring Boot (IDE run config / shell export), not only Next.js .env.local
   openai:
     api-key: ${OPENAI_API_KEY:}
     model: gpt-4o

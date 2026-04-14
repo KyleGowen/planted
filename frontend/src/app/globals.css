@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    /* Botanical palette — light, calm, natural */
+    --background: 0 0% 99%;
+    --foreground: 20 6% 20%;
+    --card: 0 0% 100%;
+    --card-foreground: 20 6% 20%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 20 6% 20%;
+    --primary: 140 20% 40%;       /* muted sage green */
+    --primary-foreground: 0 0% 98%;
+    --secondary: 270 15% 88%;     /* soft lavender */
+    --secondary-foreground: 20 6% 20%;
+    --muted: 30 10% 95%;
+    --muted-foreground: 20 6% 45%;
+    --accent: 140 15% 92%;
+    --accent-foreground: 140 20% 30%;
+    --destructive: 0 60% 55%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 20 6% 88%;
+    --input: 20 6% 88%;
+    --ring: 140 20% 40%;
+    --radius: 0.75rem;
+
+    /* Reminder colors */
+    --watering: 195 60% 45%;      /* muted blue-green */
+    --fertilizer: 35 55% 45%;     /* earthy tan */
+    --pruning: 140 35% 38%;       /* muted green */
+    --warning: 40 70% 48%;        /* restrained amber-gold */
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: var(--font-sans), system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* Quiet transitions for all interactive elements */
+@layer base {
+  a, button, [role="button"] {
+    transition: color 150ms, background-color 150ms, opacity 150ms, border-color 150ms;
+  }
+}
+
+/* Plant name / species — slightly editorial feel */
+.plant-name {
+  font-family: var(--font-serif, Georgia, serif);
+  letter-spacing: -0.01em;
+}
+
+.species-label {
+  font-style: italic;
+  letter-spacing: 0.01em;
+}
+
+/* Image strip horizontal scroll */
+.image-strip {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding-bottom: 0.25rem;
+}
+.image-strip::-webkit-scrollbar {
+  display: none;
+}

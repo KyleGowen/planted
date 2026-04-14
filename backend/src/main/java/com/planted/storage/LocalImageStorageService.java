@@ -21,8 +21,13 @@ public class LocalImageStorageService implements ImageStorageService {
     @Value("${planted.storage.local-path:./data/images}")
     private String basePath;
 
-    @Value("${server.port:8080}")
-    private int serverPort;
+    /**
+     * When set (e.g. http://192.168.1.10:8080), return absolute URLs for clients that talk to Spring directly.
+     * When unset, return a root-relative path {@code /images/...} so a dev UI on another port/host (e.g. Next on :3000)
+     * can proxy {@code /images} to this server.
+     */
+    @Value("${planted.storage.public-base-url:}")
+    private String publicBaseUrl;
 
     @Override
     public String store(MultipartFile file, Long plantId) {
@@ -64,7 +69,10 @@ public class LocalImageStorageService implements ImageStorageService {
             return storagePath;
         }
         // storagePath is relative (plants/{id}/file.jpg); served by /images/** resource handler
-        return "http://localhost:" + serverPort + "/images/" + storagePath;
+        if (publicBaseUrl != null && !publicBaseUrl.isBlank()) {
+            return publicBaseUrl.replaceAll("/+$", "") + "/images/" + storagePath;
+        }
+        return "/images/" + storagePath;
     }
 
     @Override

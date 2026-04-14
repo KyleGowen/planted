@@ -1,0 +1,9 @@
+# Used with @ActiveProfiles("test") in integration tests. Datasource comes from Testcontainers @ServiceConnection.
+spring:
+  config:
+    activate:
+      on-profile: test
+
+planted:
+  openai:
+    api-key: test-dummy-key
