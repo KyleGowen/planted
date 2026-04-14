@@ -32,6 +32,9 @@ logging:
     com.planted: INFO
 
 planted:
+  user:
+    # Until auth keys plants by real user id, workers and settings use this tenant id.
+    default-id: default
   cors:
     allowed-origin-patterns:
       - "http://localhost:3000"

@@ -375,10 +375,12 @@ public class OpenAiPlantClient {
         // strict: true requires every property to be in "required" and additionalProperties: false
         List<String> allFields = List.of(
                 "className", "genus", "species", "variety", "scientificName", "confidence",
-                "nativeRegions", "lightNeeds", "placementGuidance",
+                "nativeRegions", "lightNeeds", "lightGeneralGuidance",
+                "placementGuidance", "placementGeneralGuidance",
                 "wateringAmount", "wateringFrequency", "wateringGuidance",
                 "fertilizerType", "fertilizerFrequency", "fertilizerGuidance",
-                "pruningGuidance", "propagationInstructions",
+                "pruningActionSummary", "pruningGeneralGuidance",
+                "propagationInstructions",
                 "healthDiagnosis", "goalSuggestions",
                 "speciesOverview", "uses"
         );
@@ -398,6 +400,52 @@ public class OpenAiPlantClient {
                                 + "nativeRegions verbatim, horticultural role, brief indoor context without "
                                 + "repeating structured care schedules; conservative pest/disease mentions; "
                                 + "state uncertainty clearly if identification is weak."
+                ));
+            } else if (field.equals("lightNeeds")) {
+                properties.put(field, Map.of(
+                        "type", "string",
+                        "description",
+                        "Short primary line for the UI: brightness level for this plant in its current context "
+                                + "(e.g. bright indirect). One phrase or one short sentence only; not a paragraph."
+                ));
+            } else if (field.equals("lightGeneralGuidance")) {
+                properties.put(field, Map.of(
+                        "type", "string",
+                        "description",
+                        "Secondary educational text for the UI: what the light label means, typical distance from "
+                                + "windows, seasonal changes, conservative signs of too much or too little light. "
+                                + "Do not repeat the exact wording of lightNeeds."
+                ));
+            } else if (field.equals("placementGuidance")) {
+                properties.put(field, Map.of(
+                        "type", "string",
+                        "description",
+                        "Short primary line tailored to the user's stated location and/or geography when known; "
+                                + "specific placement recommendation for this instance. One or two short sentences."
+                ));
+            } else if (field.equals("placementGeneralGuidance")) {
+                properties.put(field, Map.of(
+                        "type", "string",
+                        "description",
+                        "Secondary educational text: general room environment tips for this species (drafts, "
+                                + "humidity, grouping with other plants, rotation for even growth if appropriate). "
+                                + "Do not repeat the exact wording of placementGuidance."
+                ));
+            } else if (field.equals("pruningActionSummary")) {
+                properties.put(field, Map.of(
+                        "type", "string",
+                        "description",
+                        "Short primary line for reminders: one or two sentences, actionable for this plant now—"
+                                + "conservative pruning only; it is valid to say routine shaping is not urgent. "
+                                + "Do not include full species treatise here."
+                ));
+            } else if (field.equals("pruningGeneralGuidance")) {
+                properties.put(field, Map.of(
+                        "type", "string",
+                        "description",
+                        "Secondary educational text: species-typical pruning habits, seasonality, how to prune "
+                                + "conservatively; 'No pruning required' or minimal pruning is a valid theme when "
+                                + "appropriate. Do not duplicate pruningActionSummary verbatim."
                 ));
             } else {
                 properties.put(field, Map.of("type", "string"));

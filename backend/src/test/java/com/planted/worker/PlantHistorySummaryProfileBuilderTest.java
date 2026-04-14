@@ -53,6 +53,25 @@ class PlantHistorySummaryProfileBuilderTest {
     }
 
     @Test
+    void buildPlantProfile_prefersSplitPruningFieldsWhenPresent() {
+        Plant plant = Plant.builder().name("P").build();
+        PlantAnalysis care = PlantAnalysis.builder()
+                .plantId(1L)
+                .analysisType(PlantAnalysis.AnalysisType.REGISTRATION)
+                .status(PlantAnalysis.AnalysisStatus.COMPLETED)
+                .pruningActionSummary("Tip long stems after growing season if crowded.")
+                .pruningGeneralGuidance("Species tolerates light shaping; avoid heavy cuts in winter.")
+                .pruningGuidance("legacy should not appear when splits exist")
+                .build();
+
+        String text = PlantHistorySummaryProfileBuilder.buildPlantProfile(plant, care);
+
+        assertThat(text).contains("Pruning action summary: Tip long stems after growing season if crowded.");
+        assertThat(text).contains("Pruning (species guidance): Species tolerates light shaping");
+        assertThat(text).doesNotContain("legacy should not appear");
+    }
+
+    @Test
     void buildPlantProfile_omitsCareHeaderWhenSnapshotWouldBeEmpty() {
         Plant plant = Plant.builder().name("X").build();
         PlantAnalysis emptyCare = PlantAnalysis.builder()

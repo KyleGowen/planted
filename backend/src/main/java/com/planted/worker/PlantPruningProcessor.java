@@ -78,7 +78,7 @@ public class PlantPruningProcessor {
 
             String genus = registrationAnalysis != null ? registrationAnalysis.getGenus() : plant.getGenus();
             String species = registrationAnalysis != null ? registrationAnalysis.getSpecies() : plant.getSpecies();
-            String pruningGuidance = registrationAnalysis != null ? registrationAnalysis.getPruningGuidance() : null;
+            String pruningGuidance = resolveSpeciesPruningGuidance(registrationAnalysis);
 
             String careHistory = buildCareHistory(plantId);
             String historyNotes = buildHistoryNotes(plantId);
@@ -155,5 +155,16 @@ public class PlantPruningProcessor {
               .append(note.getNoteText()).append("\n");
         }
         return sb.toString().trim();
+    }
+
+    private static String resolveSpeciesPruningGuidance(PlantAnalysis registrationAnalysis) {
+        if (registrationAnalysis == null) {
+            return null;
+        }
+        String general = registrationAnalysis.getPruningGeneralGuidance();
+        if (general != null && !general.isBlank()) {
+            return general;
+        }
+        return registrationAnalysis.getPruningGuidance();
     }
 }

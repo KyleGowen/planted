@@ -51,7 +51,12 @@ public final class PlantHistorySummaryProfileBuilder {
         StringBuilder b = new StringBuilder();
         appendIfPresent(b, "Health diagnosis", latestCare.getHealthDiagnosis());
         appendIfPresent(b, "Goal suggestions (from analysis)", latestCare.getGoalSuggestions());
-        appendIfPresent(b, "Pruning guidance", latestCare.getPruningGuidance());
+        appendIfPresent(b, "Pruning action summary", latestCare.getPruningActionSummary());
+        appendIfPresent(b, "Pruning (species guidance)", latestCare.getPruningGeneralGuidance());
+        if ((latestCare.getPruningActionSummary() == null || latestCare.getPruningActionSummary().isBlank())
+                && (latestCare.getPruningGeneralGuidance() == null || latestCare.getPruningGeneralGuidance().isBlank())) {
+            appendIfPresent(b, "Pruning guidance", latestCare.getPruningGuidance());
+        }
         return b.toString().trim();
     }
 

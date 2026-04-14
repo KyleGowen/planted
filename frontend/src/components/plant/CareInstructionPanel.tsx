@@ -54,6 +54,7 @@ export function CareInstructionPanel({ analysis, reminderState }: Props) {
             label="Pruning"
             value={reminderState.nextPruningInstruction}
             highlight={reminderState.pruningDue}
+            detail={analysis.pruningGeneralGuidance ?? undefined}
           />
         )}
 
@@ -63,6 +64,7 @@ export function CareInstructionPanel({ analysis, reminderState }: Props) {
             icon={<Sun size={15} className="text-amber-400" />}
             label="Light"
             value={analysis.lightNeeds}
+            detail={analysis.lightGeneralGuidance ?? undefined}
           />
         )}
         {analysis.placementGuidance && (
@@ -70,6 +72,7 @@ export function CareInstructionPanel({ analysis, reminderState }: Props) {
             icon={<MapPin size={15} className="text-stone-400" />}
             label="Placement"
             value={analysis.placementGuidance}
+            detail={analysis.placementGeneralGuidance ?? undefined}
           />
         )}
 
@@ -98,11 +101,13 @@ function CareRow({
   label,
   value,
   highlight,
+  detail,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   highlight?: boolean;
+  detail?: string;
 }) {
   return (
     <div className={`flex gap-2 text-sm ${highlight ? "text-stone-800" : "text-stone-600"}`}>
@@ -112,6 +117,9 @@ function CareRow({
           {label}
         </span>
         <span>{value}</span>
+        {detail && (
+          <p className="text-xs text-stone-400 mt-1 leading-snug">{detail}</p>
+        )}
       </div>
     </div>
   );

@@ -39,7 +39,9 @@ export interface AnalysisSummaryDto {
   confidence: string | null;
   nativeRegions: string[] | null;
   lightNeeds: string | null;
+  lightGeneralGuidance: string | null;
   placementGuidance: string | null;
+  placementGeneralGuidance: string | null;
   wateringGuidance: string | null;
   wateringAmount: string | null;
   wateringFrequency: string | null;
@@ -47,6 +49,8 @@ export interface AnalysisSummaryDto {
   fertilizerType: string | null;
   fertilizerFrequency: string | null;
   pruningGuidance: string | null;
+  pruningActionSummary: string | null;
+  pruningGeneralGuidance: string | null;
   propagationInstructions: string | null;
   healthDiagnosis: string | null;
   goalSuggestions: string | null;

@@ -8,6 +8,7 @@ import com.planted.repository.*;
 import com.planted.storage.ImageStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -36,6 +37,9 @@ public class PlantCommandService {
     private final ImageStorageService imageStorageService;
     private final PlantJobPublisher jobPublisher;
 
+    @Value("${planted.user.default-id:default}")
+    private String defaultUserId;
+
     @Transactional
     public CreatePlantResponse registerPlant(
             MultipartFile imageFile,
@@ -51,6 +55,7 @@ public class PlantCommandService {
 
         // Create plant record
         Plant plant = Plant.builder()
+                .userId(defaultUserId)
                 .name(name)
                 .location(location)
                 .goalsText(goalsText)

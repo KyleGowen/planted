@@ -22,14 +22,17 @@ public class PlantAnalysisSchema {
 
     private List<String> nativeRegions;
     private String lightNeeds;
+    private String lightGeneralGuidance;
     private String placementGuidance;
+    private String placementGeneralGuidance;
     private String wateringAmount;
     private String wateringFrequency;
     private String wateringGuidance;
     private String fertilizerType;
     private String fertilizerFrequency;
     private String fertilizerGuidance;
-    private String pruningGuidance;
+    private String pruningActionSummary;
+    private String pruningGeneralGuidance;
     private String propagationInstructions;
     private String healthDiagnosis;
     private String goalSuggestions;

@@ -166,13 +166,17 @@ public class PlantReminderService {
             }
 
             // Pruning: if there's guidance and no recent prune, flag as potentially due
-            if (analysis.getPruningGuidance() != null) {
+            String pruningPrimary = firstNonBlank(
+                    analysis.getPruningActionSummary(),
+                    analysis.getPruningGuidance(),
+                    analysis.getPruningGeneralGuidance());
+            if (pruningPrimary != null) {
                 boolean noPruneHistory = lastPrune.isEmpty();
                 boolean prunedLongAgo = lastPrune
                         .map(e -> ChronoUnit.DAYS.between(e.getPrunedAt(), now) > 180)
                         .orElse(false);
                 pruningDue = noPruneHistory || prunedLongAgo;
-                nextPruningInstruction = analysis.getPruningGuidance();
+                nextPruningInstruction = pruningPrimary;
             }
         }
 
@@ -190,6 +194,19 @@ public class PlantReminderService {
 
         reminderStateRepository.save(state);
         log.info("Reminder state recomputed for plant {}", plantId);
+    }
+
+    private static String firstNonBlank(String a, String b, String c) {
+        if (a != null && !a.isBlank()) {
+            return a;
+        }
+        if (b != null && !b.isBlank()) {
+            return b;
+        }
+        if (c != null && !c.isBlank()) {
+            return c;
+        }
+        return null;
     }
 
     private PlantImageDto getIllustratedImageDto(Long plantId) {

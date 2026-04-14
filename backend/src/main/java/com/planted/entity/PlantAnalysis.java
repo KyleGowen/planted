@@ -61,8 +61,14 @@ public class PlantAnalysis {
     @Column(name = "placement_guidance", columnDefinition = "TEXT")
     private String placementGuidance;
 
+    @Column(name = "placement_general_guidance", columnDefinition = "TEXT")
+    private String placementGeneralGuidance;
+
     @Column(name = "light_needs")
     private String lightNeeds;
+
+    @Column(name = "light_general_guidance", columnDefinition = "TEXT")
+    private String lightGeneralGuidance;
 
     @Column(name = "watering_guidance", columnDefinition = "TEXT")
     private String wateringGuidance;
@@ -84,6 +90,12 @@ public class PlantAnalysis {
 
     @Column(name = "pruning_guidance", columnDefinition = "TEXT")
     private String pruningGuidance;
+
+    @Column(name = "pruning_action_summary", columnDefinition = "TEXT")
+    private String pruningActionSummary;
+
+    @Column(name = "pruning_general_guidance", columnDefinition = "TEXT")
+    private String pruningGeneralGuidance;
 
     @Column(name = "propagation_instructions", columnDefinition = "TEXT")
     private String propagationInstructions;

@@ -89,14 +89,18 @@ public class PlantAnalysisProcessor {
             analysis.setConfidence(result.getConfidence());
             analysis.setNativeRegionsJson(result.getNativeRegions());
             analysis.setLightNeeds(result.getLightNeeds());
+            analysis.setLightGeneralGuidance(result.getLightGeneralGuidance());
             analysis.setPlacementGuidance(result.getPlacementGuidance());
+            analysis.setPlacementGeneralGuidance(result.getPlacementGeneralGuidance());
             analysis.setWateringAmount(result.getWateringAmount());
             analysis.setWateringFrequency(result.getWateringFrequency());
             analysis.setWateringGuidance(result.getWateringGuidance());
             analysis.setFertilizerType(result.getFertilizerType());
             analysis.setFertilizerFrequency(result.getFertilizerFrequency());
             analysis.setFertilizerGuidance(result.getFertilizerGuidance());
-            analysis.setPruningGuidance(result.getPruningGuidance());
+            analysis.setPruningActionSummary(result.getPruningActionSummary());
+            analysis.setPruningGeneralGuidance(result.getPruningGeneralGuidance());
+            analysis.setPruningGuidance(result.getPruningGeneralGuidance());
             analysis.setPropagationInstructions(result.getPropagationInstructions());
             analysis.setHealthDiagnosis(result.getHealthDiagnosis());
             analysis.setGoalSuggestions(result.getGoalSuggestions());
@@ -197,15 +201,22 @@ public class PlantAnalysisProcessor {
                         && !a.getId().equals(currentAnalysisId))
                 .map(a -> {
                     StringBuilder sb = new StringBuilder();
-                    appendIfPresent(sb, "Light needs", a.getLightNeeds());
-                    appendIfPresent(sb, "Placement", a.getPlacementGuidance());
+                    appendIfPresent(sb, "Light needs (summary)", a.getLightNeeds());
+                    appendIfPresent(sb, "Light (general guidance)", a.getLightGeneralGuidance());
+                    appendIfPresent(sb, "Placement (tailored)", a.getPlacementGuidance());
+                    appendIfPresent(sb, "Placement (general guidance)", a.getPlacementGeneralGuidance());
                     appendIfPresent(sb, "Watering amount", a.getWateringAmount());
                     appendIfPresent(sb, "Watering frequency", a.getWateringFrequency());
                     appendIfPresent(sb, "Watering guidance", a.getWateringGuidance());
                     appendIfPresent(sb, "Fertilizer type", a.getFertilizerType());
                     appendIfPresent(sb, "Fertilizer frequency", a.getFertilizerFrequency());
                     appendIfPresent(sb, "Fertilizer guidance", a.getFertilizerGuidance());
-                    appendIfPresent(sb, "Pruning guidance", a.getPruningGuidance());
+                    appendIfPresent(sb, "Pruning action summary", a.getPruningActionSummary());
+                    appendIfPresent(sb, "Pruning (species guidance)", a.getPruningGeneralGuidance());
+                    if ((a.getPruningActionSummary() == null || a.getPruningActionSummary().isBlank())
+                            && (a.getPruningGeneralGuidance() == null || a.getPruningGeneralGuidance().isBlank())) {
+                        appendIfPresent(sb, "Pruning guidance", a.getPruningGuidance());
+                    }
                     appendIfPresent(sb, "Health diagnosis", a.getHealthDiagnosis());
                     appendIfPresent(sb, "Goal suggestions", a.getGoalSuggestions());
                     return sb.toString().trim();

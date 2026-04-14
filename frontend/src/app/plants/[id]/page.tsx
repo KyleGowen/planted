@@ -632,6 +632,7 @@ function CarePanel({
               label="Pruning"
               value={reminderState.nextPruningInstruction}
               highlight={reminderState.pruningDue}
+              detail={analysis?.pruningGeneralGuidance ?? undefined}
             />
           )}
           {analysis?.lightNeeds && (
@@ -639,6 +640,7 @@ function CarePanel({
               icon={<Sun size={14} className="text-amber-400" />}
               label="Light"
               value={analysis.lightNeeds}
+              detail={analysis?.lightGeneralGuidance ?? undefined}
             />
           )}
           {analysis?.placementGuidance && (
@@ -646,6 +648,7 @@ function CarePanel({
               icon={<MapPin size={14} className="text-stone-400" />}
               label="Placement"
               value={analysis.placementGuidance}
+              detail={analysis?.placementGeneralGuidance ?? undefined}
             />
           )}
           {analysis?.healthDiagnosis && (
