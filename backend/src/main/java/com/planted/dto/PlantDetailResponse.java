@@ -24,6 +24,11 @@ public record PlantDetailResponse(
         ReminderStateDto reminderState,
         boolean hasActiveJobs,
         List<PlantHistoryEntryDto> historyEntries,
+        String historySummaryText,
+        OffsetDateTime historySummaryCompletedAt,
+        String historySummaryError,
+        /** True when the plant has journal entries or at least one care event (required to enqueue a history summary). */
+        boolean historySummaryEligible,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt
 ) {}

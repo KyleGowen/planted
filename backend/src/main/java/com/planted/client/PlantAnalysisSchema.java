@@ -33,6 +33,7 @@ public class PlantAnalysisSchema {
     private String propagationInstructions;
     private String healthDiagnosis;
     private String goalSuggestions;
-    private List<String> interestingFacts;
+    /** 1-3 paragraphs of encyclopedia-style species narrative (blank lines between paragraphs). */
+    private String speciesOverview;
     private List<String> uses;
 }

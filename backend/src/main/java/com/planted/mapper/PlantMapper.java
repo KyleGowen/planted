@@ -7,7 +7,10 @@ import com.planted.storage.ImageStorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -68,7 +71,7 @@ public class PlantMapper {
                 analysis.getPropagationInstructions(),
                 analysis.getHealthDiagnosis(),
                 analysis.getGoalSuggestions(),
-                analysis.getInterestingFactsJson(),
+                resolveSpeciesOverview(analysis),
                 analysis.getUsesJson(),
                 analysis.getCompletedAt(),
                 analysis.getFailureReason()
@@ -122,7 +125,11 @@ public class PlantMapper {
             PlantAnalysis latestAnalysis,
             PlantReminderState reminderState,
             boolean hasActiveJobs,
-            List<PlantHistoryEntry> historyEntries) {
+            List<PlantHistoryEntry> historyEntries,
+            String historySummaryText,
+            OffsetDateTime historySummaryCompletedAt,
+            String historySummaryError,
+            boolean historySummaryEligible) {
 
         return new PlantDetailResponse(
                 plant.getId(),
@@ -145,9 +152,83 @@ public class PlantMapper {
                 toReminderStateDto(reminderState),
                 hasActiveJobs,
                 historyEntries.stream().map(this::toHistoryEntryDto).toList(),
+                historySummaryText,
+                historySummaryCompletedAt,
+                historySummaryError,
+                historySummaryEligible,
                 plant.getCreatedAt(),
                 plant.getUpdatedAt()
         );
+    }
+
+    /**
+     * Prefer persisted encyclopedia-style prose; fall back to legacy bullet list joined as paragraphs.
+     */
+    public static String resolveSpeciesOverview(PlantAnalysis analysis) {
+        if (analysis == null) {
+            return null;
+        }
+        String overview = analysis.getSpeciesOverview();
+        if (overview != null && !overview.isBlank()) {
+            return overview;
+        }
+        List<String> legacy = analysis.getInterestingFactsJson();
+        if (legacy != null && !legacy.isEmpty()) {
+            String joined = legacy.stream()
+                    .filter(s -> s != null && !s.isBlank())
+                    .collect(Collectors.joining("\n\n"));
+            if (!joined.isBlank()) {
+                return joined;
+            }
+        }
+        return syntheticSpeciesOverviewFromStructuredFields(analysis);
+    }
+
+    /**
+     * When the model never filled species_overview / interesting_facts, stitch a short narrative from
+     * normalized taxonomy and care fields so the About pane is not empty for older analyses.
+     */
+    static String syntheticSpeciesOverviewFromStructuredFields(PlantAnalysis a) {
+        List<String> paras = new ArrayList<>();
+        if (notBlank(a.getScientificName())) {
+            StringBuilder sb = new StringBuilder(a.getScientificName().trim());
+            if (notBlank(a.getClassName())) {
+                sb.append(" (").append(a.getClassName().trim()).append(")");
+            }
+            sb.append(".");
+            paras.add(sb.toString());
+        }
+        List<String> regions = a.getNativeRegionsJson();
+        if (regions != null && !regions.isEmpty()) {
+            String loc = regions.stream()
+                    .filter(s -> s != null && !s.isBlank())
+                    .map(String::trim)
+                    .collect(Collectors.joining(", "));
+            if (!loc.isEmpty()) {
+                paras.add("It is native to " + loc + ".");
+            }
+        }
+        if (notBlank(a.getLightNeeds()) || notBlank(a.getPlacementGuidance())) {
+            StringBuilder sb = new StringBuilder();
+            if (notBlank(a.getLightNeeds())) {
+                sb.append(a.getLightNeeds().trim());
+            }
+            if (notBlank(a.getPlacementGuidance())) {
+                if (sb.length() > 0) {
+                    sb.append(" ");
+                }
+                sb.append(a.getPlacementGuidance().trim());
+            }
+            paras.add(sb.toString());
+        }
+        if (paras.isEmpty()) {
+            return null;
+        }
+        return String.join("\n\n", paras);
+    }
+
+    private static boolean notBlank(String s) {
+        return s != null && !s.isBlank();
     }
 
     private String buildSpeciesLabel(String genus, String species) {

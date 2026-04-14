@@ -31,6 +31,7 @@ public class PlantAnalysis {
 
     @Column(name = "status", nullable = false)
     @Enumerated(EnumType.STRING)
+    @Builder.Default
     private AnalysisStatus status = AnalysisStatus.PENDING;
 
     // Taxonomy
@@ -97,6 +98,9 @@ public class PlantAnalysis {
     @Column(name = "interesting_facts_json", columnDefinition = "jsonb")
     private List<String> interestingFactsJson;
 
+    @Column(name = "species_overview", columnDefinition = "TEXT")
+    private String speciesOverview;
+
     @Type(JsonBinaryType.class)
     @Column(name = "uses_json", columnDefinition = "jsonb")
     private List<String> usesJson;
@@ -108,6 +112,10 @@ public class PlantAnalysis {
 
     @Column(name = "failure_reason", columnDefinition = "TEXT")
     private String failureReason;
+
+    /** Narrative summary for {@link AnalysisType#INFO_PANEL} jobs (plant history timeline). */
+    @Column(name = "info_panel_summary", columnDefinition = "TEXT")
+    private String infoPanelSummary;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;

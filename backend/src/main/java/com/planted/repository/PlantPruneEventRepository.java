@@ -13,4 +13,6 @@ public interface PlantPruneEventRepository extends JpaRepository<PlantPruneEvent
     List<PlantPruneEvent> findByPlantIdOrderByPrunedAtDesc(Long plantId);
 
     Optional<PlantPruneEvent> findFirstByPlantIdOrderByPrunedAtDesc(Long plantId);
+
+    boolean existsByPlantId(Long plantId);
 }

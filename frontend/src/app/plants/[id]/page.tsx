@@ -43,6 +43,10 @@ export default function PlantDetailPage() {
     queryKey: ["plant", plantId],
     queryFn: () => getPlant(plantId),
     refetchInterval: (query) => {
+      // Stale cache can still have hasActiveJobs true while refetches fail; don't poll on hard errors.
+      if (query.state.status === "error") {
+        return false;
+      }
       const data = query.state.data;
       if (!data) return 3000;
       return data.hasActiveJobs ? 3000 : false;
@@ -550,7 +554,7 @@ function SpeciesPanel({
           !displayError && (
             <p className="text-sm text-stone-400 italic">
               {historySummaryEligible
-                ? "Tap Generate summary to build a short narrative from your journal, photos, and care log."
+                ? "Tap Generate summary to build a short timeline from your journal, photos, and care log."
                 : "Add a journal note or record watering, fertilizer, or pruning before you can generate a history summary."}
             </p>
           )

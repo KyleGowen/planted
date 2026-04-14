@@ -93,6 +93,13 @@ public class PlantController {
         return ResponseEntity.noContent().build();
     }
 
+    /** Declared before <code>/{id}/history</code> so <code>/history/summary</code> is never ambiguous. */
+    @PostMapping("/{id}/history/summary")
+    public ResponseEntity<RequestHistorySummaryResponse> requestHistorySummary(@PathVariable Long id) {
+        RequestHistorySummaryResponse response = commandService.requestHistorySummary(id);
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
+    }
+
     @PostMapping("/{id}/history")
     public ResponseEntity<Void> addHistoryNote(
             @PathVariable Long id,

@@ -149,6 +149,71 @@ public class OpenAiPlantClient {
         }
     }
 
+    /**
+     * Summarize owner journal + care timeline into narrative text for the About pane.
+     *
+     * @param plantProfile   placement, goals, geo, and latest care-analysis snapshot (may be blank)
+     * @param baselinePhotoNote optional note when baseline image could not be attached (e.g. S3)
+     * @param imagesBase64   vision images in prompt order: baseline first (if any), then journal photos
+     */
+    public PlantHistorySummarySchema summarizePlantHistory(
+            String plantProfile,
+            String baselinePhotoNote,
+            String timelineText,
+            String plantName,
+            String speciesLabel,
+            String imageCountLabel,
+            List<String> imagesBase64,
+            List<String> mimeTypes,
+            Long plantId,
+            Long analysisId) {
+
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalStateException(
+                    "OpenAI is not configured: set planted.openai.api-key (or OPENAI_API_KEY) to generate a history summary.");
+        }
+
+        String promptKey = "plant_history_summary_v2";
+        String systemPrompt = resolvePrompt(promptKey, "system");
+
+        Map<String, String> templateVars = new HashMap<>();
+        templateVars.put("plant_profile", Optional.ofNullable(plantProfile).orElse(""));
+        templateVars.put("baseline_photo_note", Optional.ofNullable(baselinePhotoNote).orElse(""));
+        templateVars.put("plant_name", Optional.ofNullable(plantName).orElse(""));
+        templateVars.put("species_label", Optional.ofNullable(speciesLabel).orElse(""));
+        templateVars.put("timeline_text", timelineText != null ? timelineText : "");
+        templateVars.put("image_count", Optional.ofNullable(imageCountLabel).orElse(""));
+        String userPrompt = renderUserPrompt(promptKey, templateVars);
+
+        Map<String, Object> inputVariables = new HashMap<>();
+        inputVariables.put("plant_profile", plantProfile);
+        inputVariables.put("baseline_photo_note", baselinePhotoNote);
+        inputVariables.put("plant_name", plantName);
+        inputVariables.put("species_label", speciesLabel);
+        inputVariables.put("timeline_text", timelineText);
+        inputVariables.put("image_count", imageCountLabel);
+
+        List<String> safeImages = imagesBase64 != null ? imagesBase64 : List.of();
+        List<String> safeMimes = mimeTypes != null ? mimeTypes : List.of();
+
+        String responseText = callWithImages(systemPrompt, userPrompt,
+                safeImages, safeMimes,
+                promptKey, inputVariables, plantId, analysisId, historySummarySchema());
+
+        try {
+            JsonNode root = objectMapper.readTree(responseText);
+            String outputText = extractOutputText(root);
+            PlantHistorySummarySchema parsed = objectMapper.readValue(outputText, PlantHistorySummarySchema.class);
+            if (parsed.getSummary() == null || parsed.getSummary().isBlank()) {
+                throw new IllegalStateException("Model returned an empty summary.");
+            }
+            return parsed;
+        } catch (Exception e) {
+            log.error("Failed to parse plant history summary response", e);
+            throw new RuntimeException("Failed to parse plant history summary: " + e.getMessage(), e);
+        }
+    }
+
     private String callWithImage(
             String systemPrompt, String userPrompt,
             String imageBase64, String mimeType,
@@ -191,7 +256,7 @@ public class OpenAiPlantClient {
                 "response_format", Map.of(
                         "type", "json_schema",
                         "json_schema", Map.of(
-                                "name", promptKey.replace("_v1", "_response"),
+                                "name", responseFormatSchemaName(promptKey),
                                 "schema", schema,
                                 "strict", true
                         )
@@ -277,6 +342,11 @@ public class OpenAiPlantClient {
         throw new RuntimeException("OpenAI API call failed after retries", lastException);
     }
 
+    /** OpenAI json_schema name derived from prompt key (e.g. plant_history_summary_v2 → plant_history_summary_response). */
+    private static String responseFormatSchemaName(String promptKey) {
+        return promptKey.replaceFirst("_v\\d+$", "_response");
+    }
+
     private String extractOutputText(JsonNode root) {
         // Chat Completions API: choices[0].message.content
         JsonNode choices = root.path("choices");
@@ -310,13 +380,25 @@ public class OpenAiPlantClient {
                 "fertilizerType", "fertilizerFrequency", "fertilizerGuidance",
                 "pruningGuidance", "propagationInstructions",
                 "healthDiagnosis", "goalSuggestions",
-                "interestingFacts", "uses"
+                "speciesOverview", "uses"
         );
 
         Map<String, Object> properties = new LinkedHashMap<>();
         for (String field : allFields) {
-            if (field.equals("nativeRegions") || field.equals("interestingFacts") || field.equals("uses")) {
+            if (field.equals("nativeRegions") || field.equals("uses")) {
                 properties.put(field, Map.of("type", "array", "items", Map.of("type", "string")));
+            } else if (field.equals("speciesOverview")) {
+                properties.put(field, Map.of(
+                        "type", "string",
+                        "description",
+                        "Exactly 1-3 paragraphs of neutral, scientific encyclopedia prose like a Wikipedia "
+                                + "article lead: each paragraph multiple full sentences; separate paragraphs with "
+                                + "two newline characters; third person only; no bullets or numbered lists; cover "
+                                + "taxonomy, morphology, native range/ecology at high level without duplicating "
+                                + "nativeRegions verbatim, horticultural role, brief indoor context without "
+                                + "repeating structured care schedules; conservative pest/disease mentions; "
+                                + "state uncertainty clearly if identification is weak."
+                ));
             } else {
                 properties.put(field, Map.of("type", "string"));
             }
@@ -345,6 +427,18 @@ public class OpenAiPlantClient {
         schema.put("properties", properties);
         schema.put("required", List.of("pruningNeeded", "verdict", "pruningAmount",
                 "specificRecommendations", "goalAlignment", "confidence", "notes"));
+        schema.put("additionalProperties", false);
+        return schema;
+    }
+
+    private Map<String, Object> historySummarySchema() {
+        Map<String, Object> properties = new LinkedHashMap<>();
+        properties.put("summary", Map.of("type", "string"));
+
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("type", "object");
+        schema.put("properties", properties);
+        schema.put("required", List.of("summary"));
         schema.put("additionalProperties", false);
         return schema;
     }

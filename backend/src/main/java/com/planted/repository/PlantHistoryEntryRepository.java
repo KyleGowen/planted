@@ -11,5 +11,9 @@ public interface PlantHistoryEntryRepository extends JpaRepository<PlantHistoryE
 
     List<PlantHistoryEntry> findByPlantIdOrderByCreatedAtDesc(Long plantId);
 
+    List<PlantHistoryEntry> findByPlantIdOrderByCreatedAtAsc(Long plantId);
+
     List<PlantHistoryEntry> findTop5ByPlantIdAndNoteTextIsNotNullOrderByCreatedAtDesc(Long plantId);
+
+    long countByPlantId(Long plantId);
 }

@@ -13,4 +13,6 @@ public interface PlantWateringEventRepository extends JpaRepository<PlantWaterin
     List<PlantWateringEvent> findByPlantIdOrderByWateredAtDesc(Long plantId);
 
     Optional<PlantWateringEvent> findFirstByPlantIdOrderByWateredAtDesc(Long plantId);
+
+    boolean existsByPlantId(Long plantId);
 }

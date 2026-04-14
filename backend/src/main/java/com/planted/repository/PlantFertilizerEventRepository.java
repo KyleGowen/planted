@@ -13,4 +13,6 @@ public interface PlantFertilizerEventRepository extends JpaRepository<PlantFerti
     List<PlantFertilizerEvent> findByPlantIdOrderByFertilizedAtDesc(Long plantId);
 
     Optional<PlantFertilizerEvent> findFirstByPlantIdOrderByFertilizedAtDesc(Long plantId);
+
+    boolean existsByPlantId(Long plantId);
 }

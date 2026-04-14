@@ -25,7 +25,7 @@ public record AnalysisSummaryDto(
         String propagationInstructions,
         String healthDiagnosis,
         String goalSuggestions,
-        List<String> interestingFacts,
+        String speciesOverview,
         List<String> uses,
         OffsetDateTime completedAt,
         String failureReason

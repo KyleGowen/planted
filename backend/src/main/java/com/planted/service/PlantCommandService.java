@@ -289,6 +289,7 @@ public class PlantCommandService {
                 .build();
         historyEntryRepository.save(entry);
         log.info("History note added for plant {}", plantId);
+        createAndEnqueueHistorySummaryAnalysis(plantId);
     }
 
     @Transactional
@@ -317,6 +318,22 @@ public class PlantCommandService {
                 .build();
         historyEntryRepository.save(entry);
         log.info("History image added for plant {}", plantId);
+        createAndEnqueueHistorySummaryAnalysis(plantId);
+    }
+
+    @Transactional
+    public RequestHistorySummaryResponse requestHistorySummary(Long plantId) {
+        findActivePlant(plantId);
+        if (!hasTimelineSourceData(plantId)) {
+            throw new IllegalArgumentException(
+                    "Add a journal entry or care event before generating a history summary.");
+        }
+        PlantAnalysis analysis = createAndEnqueueHistorySummaryAnalysis(plantId);
+        String createdAtIso = analysis.getCreatedAt() != null
+                ? analysis.getCreatedAt().toString()
+                : "";
+        return new RequestHistorySummaryResponse(
+                analysis.getId(), plantId, analysis.getStatus().name(), createdAtIso);
     }
 
     @Transactional
@@ -342,6 +359,45 @@ public class PlantCommandService {
     private Plant findActivePlant(Long plantId) {
         return plantRepository.findByIdAndStatus(plantId, PlantStatus.ACTIVE)
                 .orElseThrow(() -> new IllegalArgumentException("Active plant not found: " + plantId));
+    }
+
+    /**
+     * Creates a PENDING INFO_PANEL row and publishes PLANT_HISTORY_SUMMARY. Caller must ensure
+     * {@link #hasTimelineSourceData(Long)} is true (always true immediately after adding a journal entry).
+     */
+    private PlantAnalysis createAndEnqueueHistorySummaryAnalysis(Long plantId) {
+        if (!hasTimelineSourceData(plantId)) {
+            throw new IllegalArgumentException(
+                    "Add a journal entry or care event before generating a history summary.");
+        }
+        PlantAnalysis analysis = PlantAnalysis.builder()
+                .plantId(plantId)
+                .analysisType(PlantAnalysis.AnalysisType.INFO_PANEL)
+                .status(PlantAnalysis.AnalysisStatus.PENDING)
+                .build();
+        analysis = plantAnalysisRepository.save(analysis);
+        plantAnalysisRepository.flush();
+        Long savedAnalysisId = analysis.getId();
+        analysis = plantAnalysisRepository.findById(savedAnalysisId)
+                .orElseThrow(() -> new IllegalStateException("Saved history summary analysis not found: " + savedAnalysisId));
+
+        jobPublisher.publish(PlantJobMessage.builder()
+                .jobType(PlantJobMessage.JobType.PLANT_HISTORY_SUMMARY)
+                .plantId(plantId)
+                .analysisId(analysis.getId())
+                .build());
+
+        log.info("History summary job enqueued for plant {}, analysisId={}", plantId, analysis.getId());
+        return analysis;
+    }
+
+    private boolean hasTimelineSourceData(Long plantId) {
+        if (historyEntryRepository.countByPlantId(plantId) > 0) {
+            return true;
+        }
+        return wateringEventRepository.existsByPlantId(plantId)
+                || fertilizerEventRepository.existsByPlantId(plantId)
+                || pruneEventRepository.existsByPlantId(plantId);
     }
 
     private void validateImageFile(MultipartFile file) {

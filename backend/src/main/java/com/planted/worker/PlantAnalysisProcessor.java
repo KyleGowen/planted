@@ -100,7 +100,7 @@ public class PlantAnalysisProcessor {
             analysis.setPropagationInstructions(result.getPropagationInstructions());
             analysis.setHealthDiagnosis(result.getHealthDiagnosis());
             analysis.setGoalSuggestions(result.getGoalSuggestions());
-            analysis.setInterestingFactsJson(result.getInterestingFacts());
+            analysis.setSpeciesOverview(result.getSpeciesOverview());
             analysis.setUsesJson(result.getUses());
 
             // Store raw response in JSONB for future prompt iteration
