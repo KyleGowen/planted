@@ -7,7 +7,12 @@ alwaysApply: false
 # Frontend Specialist
 
 ## Stack
-Next.js 14 (App Router), TypeScript, Tailwind CSS, shadcn/ui, TanStack Query (React Query), REST for core CRUD/upload/status flows, Vercel AI SDK available for future agent/chat features.
+Next.js **16** (App Router), TypeScript, Tailwind CSS, shadcn/ui, TanStack Query (React Query), REST for core CRUD/upload/status flows, Vercel AI SDK available for future agent/chat features.
+
+## Dev proxy and LAN
+- **`src/lib/api.ts`:** In development, default to **same-origin** `/api` (empty base) so phones on the LAN use the Next host; **`next.config.ts`** rewrites `/api` and `/images` to Spring (`PLANTED_API_PROXY_ORIGIN`, default `http://127.0.0.1:8080`).
+- **`allowedDevOrigins`:** Auto-filled from private IPv4 at dev startup; **`PLANTED_DEV_EXTRA_ORIGINS`** for extras.
+- Image URLs may be **root-relative** `/images/...`; components must not assume every app image URL starts with `http`.
 
 ## App Router Routes
 - `/plants` — PlantList page

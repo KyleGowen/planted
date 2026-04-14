@@ -24,6 +24,9 @@ alwaysApply: true
 14. The conservative answer is valid — especially for pruning. "No pruning required" is a strong, acceptable outcome.
 15. Preserve raw model outputs (`rawModelResponseJsonb`) for future refinement, but expose normalized fields for app behavior.
 
+## Ship vs feature work
+For **ship** (commit + push), follow **[scripts/ship-checklist.md](scripts/ship-checklist.md)** and **[.cursor/rules/ship.mdc](.cursor/rules/ship.mdc)** — include documentation and Cursor context updates when applicable, not only git.
+
 ## Feature Definition of Done
 1. Feature compiles with no errors
 2. All new code is fully covered by unit tests

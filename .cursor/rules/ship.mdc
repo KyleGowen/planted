@@ -1,0 +1,21 @@
+---
+description: Defines what “ship” means — commit/push plus documentation and Cursor context updates.
+alwaysApply: true
+---
+
+# Ship command (Planted)
+
+When the user asks to **ship**, **release**, or **merge-ready push**, treat that as **more than git only**.
+
+## Required before push
+
+1. Walk **[scripts/ship-checklist.md](scripts/ship-checklist.md)** and complete every item that applies to the change set (skip only what is genuinely unrelated).
+2. **Documentation** — Update user- or operator-facing docs when behavior, env vars, ports, profiles, or run instructions change. Default touch points: repo [README.md](README.md), [frontend/README.md](frontend/README.md); add backend notes in README or a backend README if ops/contracts changed materially.
+3. **Cursor / agent context** — Update [.cursor/rules/](.cursor/rules/) (and [frontend/AGENTS.md](frontend/AGENTS.md) when Next/agent conventions shift) so future sessions match the shipped behavior. Do not leave specialist ownership or stack assumptions stale.
+
+## Git
+
+- Follow workspace policy for git operations (e.g. use a subagent for commit/push when the project requires it).
+- Commit message should describe **what** and **why** in full sentences; confirm no secrets or local-only junk are staged.
+
+If the user explicitly says **ship code only** or **push as-is**, you may skip doc/context updates for that request only.

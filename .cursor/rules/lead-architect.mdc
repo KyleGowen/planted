@@ -24,6 +24,9 @@ Own system-level design, execution order, and cross-functional coordination. Bre
 4. **Async-first must survive every feature.** For any new feature: does this block the user waiting on LLM/image generation? If yes, redesign as a queued job or precomputed state.
 5. **Optimize list-page speed.** Any repeated or expensive logic for list rendering must be precomputed or persisted — especially reminder state and warning indicators.
 
+## Ship and LAN documentation
+When shipping features that affect how developers run the stack (ports, env, proxies, CORS, or home-network access), ensure **repo [README.md](README.md)**, **[frontend/README.md](frontend/README.md)**, and **[frontend/AGENTS.md](frontend/AGENTS.md)** stay accurate, and complete **[scripts/ship-checklist.md](scripts/ship-checklist.md)** per **[.cursor/rules/ship.mdc](.cursor/rules/ship.mdc)**.
+
 ## Default Implementation Sequence
 1. Domain model and API contract alignment
 2. Database schema and backend entities

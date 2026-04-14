@@ -7,13 +7,13 @@ An async-first plant tracking application. Upload photos of your plants, get AI-
 ## Architecture Overview
 
 ```
-┌─────────────────────┐      REST      ┌─────────────────────────┐
-│   Next.js Frontend  │ ◄────────────► │  Spring Boot Backend    │
-│   (App Router)      │                │  :8080                  │
-│   TanStack Query    │                │                         │
-│   shadcn/ui         │                │  PlantController        │
-└─────────────────────┘                │  ReminderController     │
-                                       └──────────┬──────────────┘
+┌─────────────────────┐   dev: same host   ┌─────────────────────────┐
+│   Next.js Frontend  │   /api + /images   │  Spring Boot Backend    │
+│   (App Router)      │   proxied to ────► │  :8080 (local profile)  │
+│   :3000             │   127.0.0.1:8080   │                         │
+│   TanStack Query    │                    │  PlantController        │
+│   shadcn/ui         │                    │  ReminderController     │
+└─────────────────────┘                    └──────────┬──────────────┘
                                                   │
                               ┌───────────────────┼────────────────────┐
                               │                   │                    │
@@ -66,7 +66,7 @@ POST /api/plants  →  202 Accepted immediately
 docker-compose up -d
 ```
 
-This starts Postgres 15 on port 5432 with:
+This maps Postgres to host port **5434** (container listens on 5432) with:
 - database: `planted_db`
 - user: `planted`
 - password: `planted`
@@ -78,8 +78,8 @@ cd backend
 OPENAI_API_KEY=your_key_here mvn spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
-The backend starts on `http://localhost:8080`.  
-Flyway runs all 7 migrations automatically on startup.  
+The backend starts on `http://localhost:8080` (all interfaces — reachable on your LAN IP for API-only clients).  
+Flyway runs migrations from `backend/src/main/resources/db/migration/` on startup.  
 Images are stored locally in `./backend/data/images/`.
 
 ### 3. Start the frontend
@@ -91,6 +91,31 @@ npm run dev
 ```
 
 The frontend starts on `http://localhost:3000`.
+
+---
+
+## LAN development (phones / other machines on Wi‑Fi)
+
+Use this when you open the UI from another device on the same private network (no router WAN port forwarding — that would expose the app to the internet).
+
+1. Start Postgres, Spring (`local` profile), and the frontend with **`npm run dev:lan`** in `frontend/` (listens on `0.0.0.0:3000`).
+2. In **development**, the browser talks only to **Next on port 3000**. Next.js **rewrites** `/api/*` and `/images/*` to Spring at `http://127.0.0.1:8080`, so API calls and local plant images work from a phone without `localhost` on the wrong device.
+3. Spring returns **root-relative** image paths (`/images/...`) when `planted.storage.public-base-url` is unset; set that property only if something calls Spring **directly** for images (no Next proxy).
+4. **CORS** for direct browser→Spring calls is configured via `planted.cors.allowed-origin-patterns` in `application.yml` (localhost, Vercel, private LAN patterns). Same-origin traffic through Next does not need CORS for `/api`.
+5. Next.js 16 **allowedDevOrigins** is populated from this machine’s private IPv4 addresses at dev startup; use **`PLANTED_DEV_EXTRA_ORIGINS`** (comma-separated) if you need more hosts.
+
+Details and env hints: **[frontend/README.md](frontend/README.md)**. Quick helper (prints LAN IP and start lines): **`./scripts/planted-lan-dev.sh`**.
+
+---
+
+## Ship (commit + push)
+
+**Ship** means documentation and Cursor context are updated when they apply to the change — not only git. Before pushing:
+
+- Follow **[scripts/ship-checklist.md](scripts/ship-checklist.md)**.
+- Observe **[.cursor/rules/ship.mdc](.cursor/rules/ship.mdc)**.
+
+If you intend **code only** with no doc/context pass, say so explicitly (e.g. “ship code only”).
 
 ---
 
@@ -116,7 +141,7 @@ Each list card thumbnail uses: `illustratedImage` → `originalImage` (user's ow
 | Variable | Description | Local default |
 |---|---|---|
 | `OPENAI_API_KEY` | OpenAI API key (required for analysis) | — |
-| `SPRING_DATASOURCE_URL` | PostgreSQL JDBC URL | `jdbc:postgresql://localhost:5432/planted_db` |
+| `SPRING_DATASOURCE_URL` | PostgreSQL JDBC URL | `jdbc:postgresql://localhost:5434/planted_db` (matches `docker-compose` host port) |
 | `SPRING_DATASOURCE_USERNAME` | DB username | `planted` |
 | `SPRING_DATASOURCE_PASSWORD` | DB password | `planted` |
 
@@ -136,7 +161,9 @@ Each list card thumbnail uses: `illustratedImage` → `originalImage` (user's ow
 
 | Variable | Description | Default |
 |---|---|---|
-| `NEXT_PUBLIC_API_URL` | Backend base URL | `http://localhost:8080` |
+| `NEXT_PUBLIC_API_URL` | Backend base URL for browser `fetch` | In **development**, leave unset so requests use same-origin `/api` (Next rewrites to Spring). Set for production builds or when the UI must call a fixed API host. |
+| `PLANTED_API_PROXY_ORIGIN` | (Next dev only) Where to proxy `/api` and `/images` | `http://127.0.0.1:8080` |
+| `PLANTED_DEV_EXTRA_ORIGINS` | (Next dev only) Extra entries for `allowedDevOrigins` | — |
 
 ---
 
@@ -171,7 +198,7 @@ Controlled by Spring profiles:
 
 Both implement `ImageStorageService` and `PlantJobPublisher` interfaces — no application logic changes between profiles.
 
-Local images are served at `http://localhost:8080/images/{path}` via a Spring MVC resource handler.
+Local files are served by Spring at `/images/**` (resource handler). With the **Next dev proxy**, clients typically load `http://<next-host>:3000/images/...`, which forwards to Spring. For API consumers that bypass Next, optionally set `planted.storage.public-base-url` so JSON includes absolute URLs.
 
 ---
 
@@ -211,20 +238,7 @@ Prompt keys:
 
 ## Database Schema
 
-10 Flyway migrations in `backend/src/main/resources/db/migration/`:
-
-| Migration | Tables / Changes |
-|---|---|
-| V1 | `plants` |
-| V2 | `plant_images` |
-| V3 | `plant_analyses` |
-| V4 | `plant_watering_events`, `plant_fertilizer_events`, `plant_prune_events` |
-| V5 | `plant_reminder_state` |
-| V6 | `llm_prompts` (with seeded prompt templates) |
-| V7 | `llm_requests` (audit log) |
-| V8 | `plants` geo columns (`geo_country`, `geo_state`, `geo_city`) |
-| V9 | `plant_history_entries` (timestamped observations with optional image) |
-| V10 | Updated prompt templates with care context |
+Versioned SQL migrations live in `backend/src/main/resources/db/migration/` (`V__*.sql`). Flyway applies them on startup. See that directory for the current set (plants, images, analyses, events, reminders, LLM audit, history, species overview, history summary, etc.).
 
 ---
 
@@ -251,7 +265,8 @@ planted/
 │       ├── components/     # React components
 │       ├── lib/            # api.ts, providers.tsx
 │       └── types/          # TypeScript interfaces (plant.ts)
-├── .cursor/rules/          # Cursor agent rules (6 .mdc files)
+├── .cursor/rules/          # Cursor agent rules (.mdc); includes ship.mdc + specialists
+├── scripts/                # planted-lan-dev.sh, ship-checklist.md
 ├── docker-compose.yml
 └── README.md
 ```

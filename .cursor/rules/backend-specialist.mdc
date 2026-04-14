@@ -9,6 +9,10 @@ alwaysApply: false
 ## Stack
 Java 21, Spring Boot, Maven, Spring Web, Spring Data JPA, PostgreSQL, AWS S3 (prod), local file storage (local dev), Amazon SQS (prod), OpenAI Responses API.
 
+## Local dev and LAN
+- **`local` profile:** `LocalImageStorageService.getUrl` returns **root-relative** `/images/...` unless **`planted.storage.public-base-url`** is set (for clients that hit Spring directly). Next.js dev proxies `/images` to Spring when the UI is on :3000.
+- **CORS:** `planted.cors.allowed-origin-patterns` in `application.yml` (see `PlantedCorsProperties` / `WebConfig`). Direct browser→Spring calls need this; traffic via Next same-origin `/api` does not.
+
 ## Architectural Rules
 1. **Async-first is the default.** User-facing requests must never block on LLM or image generation work.
 2. Background jobs must be record-ID based and retry-friendly.
