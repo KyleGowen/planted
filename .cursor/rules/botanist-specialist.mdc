@@ -20,7 +20,7 @@ Structured fields the application stores per analysis:
 - `placementGuidance` (tailored primary), `placementGeneralGuidance` (general gray line)
 - `wateringAmount`, `wateringFrequency`, `wateringGuidance`
 - `fertilizerType`, `fertilizerFrequency`, `fertilizerGuidance`
-- `pruningActionSummary` (short primary / reminder line), `pruningGeneralGuidance` (species-level gray line); legacy `pruningGuidance` column may still hold older analyses or mirror general for compatibility
+- `pruningActionSummary` (primary / reminder line: must state **when** and **how much** for this individual plant, conservatively), `pruningGeneralGuidance` (species-level gray line—no duplicate of that specific plan); legacy `pruningGuidance` may still hold older analyses or mirror general for compatibility
 - `propagationInstructions` (if applicable)
 - `healthDiagnosis` (visible problems, never assume watering is the only cause)
 - `goalSuggestions` (tied to user's `goalsText`)

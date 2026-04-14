@@ -231,7 +231,7 @@ For local dev, the `LocalPlantJobPublisher` publishes Spring `ApplicationEvent`s
 Prompts are versioned in the `llm_prompts` table (seeded by `V6__create_llm_prompts.sql`). Every OpenAI call is audited in `llm_requests` with the rendered prompt and response — enabling full debuggability and future prompt iteration without losing history.
 
 Prompt keys:
-- `plant_registration_analysis_v1` — species ID + care guidance (versioned in DB; current seed includes layered light/placement/pruning fields matching structured JSON schema)
+- `plant_registration_analysis_v1` — species ID + care guidance (versioned in DB; structured output includes layered light/placement/pruning fields, with `pruningActionSummary` requiring when and how much for the individual plant). When the user has saved a home/growing-site address (`user_physical_addresses`), the rendered registration user prompt includes it as climate context (typical regional seasons only—not live weather).
 - `plant_info_panel_v1` — species facts, history, uses
 - `plant_reminder_recompute_v1` — care scheduling
 - `pruning_analysis_v1` — conservative pruning guidance from photos

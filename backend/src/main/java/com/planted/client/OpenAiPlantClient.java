@@ -447,17 +447,23 @@ public class OpenAiPlantClient {
                 properties.put(field, Map.of(
                         "type", "string",
                         "description",
-                        "Short primary line for reminders: one or two sentences, actionable for this plant now—"
-                                + "conservative pruning only; it is valid to say routine shaping is not urgent. "
-                                + "Do not include full species treatise here."
+                        "Primary UI line for this individual plant in the image: two or three short sentences that "
+                                + "MUST include (1) WHEN to prune—best season or month window, growth phase, or "
+                                + "visible triggers (leggy, crowded, dead wood), using geographic season and care "
+                                + "history last-pruned date when provided; if unsure, say what to wait for before "
+                                + "cutting. (2) HOW MUCH to remove—conservative degree (dead/damaged only, light "
+                                + "tips, thin a few stems, or cap live foliage removal around one-quarter to "
+                                + "one-third per session unless clearly justified). Valid to state no pruning "
+                                + "needed now. Do not move species background here; keep that in "
+                                + "pruningGeneralGuidance."
                 ));
             } else if (field.equals("pruningGeneralGuidance")) {
                 properties.put(field, Map.of(
                         "type", "string",
                         "description",
-                        "Secondary educational text: species-typical pruning habits, seasonality, how to prune "
-                                + "conservatively; 'No pruning required' or minimal pruning is a valid theme when "
-                                + "appropriate. Do not duplicate pruningActionSummary verbatim."
+                        "Secondary educational text: species-typical pruning habits and rationale, general "
+                                + "seasonality—do not repeat the same specific when/how-much plan from "
+                                + "pruningActionSummary. 'No pruning required' or minimal pruning is a valid theme."
                 ));
             } else {
                 properties.put(field, Map.of("type", "string"));
