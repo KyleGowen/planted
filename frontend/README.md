@@ -33,6 +33,8 @@ Repo-level overview: **[../README.md](../README.md)** (architecture + ship check
 
 The plant detail **Care** panel shows a short primary line plus gray educational text for watering, fertilizer, pruning, light, and placement when the backend provides the matching `latestAnalysis` fields (pruning/light/placement general lines appear after registration or reanalysis with the current schema). For **outdoor** plants with coordinates, the backend may also persist a **`weatherCareNote`** on `reminderState`; the UI shows it under the care rows when present. **Growing context** and coordinates are set at upload (`growingContext`, optional `latitude`/`longitude` parts) or later via **`PATCH /api/plants/{id}/growing`** (see `updatePlantGrowing` in `src/lib/api.ts`).
 
+The **Your Plants** list (`/plants`) includes an optional **Your Location** field; it calls `getUserLocation` / `putUserLocation` in `src/lib/api.ts` and saves on blur so care and history LLM prompts can use typical regional climate context (not live weather).
+
 The **About** panel **History** section prefers **`historyDailyDigests`** (one narrative tile per local calendar day) when the backend returns them after **Generate / Refresh summary**; otherwise it uses structured `historyEntries` plus legacy summary text parsing.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.

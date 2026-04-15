@@ -264,7 +264,7 @@ Versioned SQL migrations live in `backend/src/main/resources/db/migration/` (`V_
 planted/
 ├── backend/
 │   └── src/main/java/com/planted/
-│       ├── controller/     # PlantController, ReminderController
+│       ├── controller/     # PlantController, ReminderController, UserLocationController
 │       ├── service/        # PlantCommandService, PlantQueryService, PlantReminderService
 │       ├── worker/         # PlantJobWorker + processors
 │       ├── client/         # OpenAiPlantClient, OpenAiImageGenerationClient

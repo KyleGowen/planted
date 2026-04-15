@@ -6,6 +6,7 @@ import com.planted.entity.*;
 import com.planted.queue.PlantJobMessage;
 import com.planted.queue.PlantJobPublisher;
 import com.planted.repository.*;
+import com.planted.service.CareHistoryFormatter;
 import com.planted.service.UserPhysicalAddressService;
 import com.planted.storage.ImageStorageService;
 import lombok.RequiredArgsConstructor;

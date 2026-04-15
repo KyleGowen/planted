@@ -27,8 +27,11 @@ public class CareHistoryFormatter {
     private final PlantPruneEventRepository pruneEventRepository;
 
     public String formatForLlm(Long plantId) {
-        List<PlantWateringEvent> waterings =
-                wateringEventRepository.findTop20ByPlantIdOrderByWateredAtDesc(plantId);
+        List<PlantWateringEvent> waterings = wateringEventRepository
+                .findByPlantIdOrderByWateredAtDesc(plantId)
+                .stream()
+                .limit(MAX_WATERING_DATES)
+                .toList();
         String wateringPart = waterings.isEmpty()
                 ? "Never recorded"
                 : waterings.stream()

@@ -30,7 +30,7 @@ com.planted.
   worker/        # PlantJobWorker, processors
   client/        # OpenAiPlantClient, OpenAiImageGenerationClient
   repository/    # one JpaRepository per entity
-  entity/        # Plant, PlantImage, PlantAnalysis, events, PlantReminderState
+  entity/        # Plant, PlantImage, PlantAnalysis, events, PlantReminderState, UserPhysicalAddress
   dto/           # explicit request/response records
   config/        # Spring profiles, beans
   storage/       # ImageStorageService + Local/S3 impls
@@ -68,6 +68,7 @@ Outdoor recomputes may call **`WeatherService`** (Open-Meteo by default); disabl
 - `llm_prompts` table holds versioned reusable templates with `prompt_key`, `version`, `role`
 - `llm_requests` table audits every rendered prompt sent to the model + response
 - `OpenAiPlantClient` must write to `llm_requests` on every call
+- **User home address** for prompt climate context: `user_physical_addresses` + `UserPhysicalAddressService`; `GET`/`PUT /api/user/location`. New plants get `plants.user_id` from `planted.user.default-id` (override with `PLANTED_USER_DEFAULT_ID` / `planted.user.default-id`) so settings and plants stay aligned before auth.
 
 ## Coding Standards
 - Thin controllers, richer services

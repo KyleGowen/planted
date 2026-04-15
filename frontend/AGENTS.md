@@ -11,3 +11,4 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - **`allowedDevOrigins`:** Populated from the machine’s private IPv4 addresses so opening the app via `http://192.168.x.x:3000` works. Extend with **`PLANTED_DEV_EXTRA_ORIGINS`** if needed.
 - **Images:** DTOs may use root-relative `/images/...`; **`PlantImageStrip`** must treat **`/`** URLs like app-hosted images (not only `http:`).
 - **Shipping:** If the user says **ship**, update **README** / this file when conventions change, and follow **`scripts/ship-checklist.md`** + **`.cursor/rules/ship.mdc`**.
+- **Plant detail types:** `PlantDetailResponse` may include **`historyDailyDigests`** (preferred History tiles in About when non-empty); align `src/types/plant.ts` with the backend contract.
