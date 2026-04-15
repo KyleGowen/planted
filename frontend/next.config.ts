@@ -19,7 +19,7 @@ function privateLanDevOrigins(): string[] {
   for (const nets of Object.values(os.networkInterfaces())) {
     if (!nets) continue;
     for (const net of nets) {
-      const isV4 = net.family === "IPv4" || net.family === 4;
+      const isV4 = net.family === "IPv4";
       if (!isV4 || net.internal) continue;
       const a = net.address;
       const isPrivate =

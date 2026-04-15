@@ -20,7 +20,6 @@ export default function UploadPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [name, setName] = useState("");
-  const [location, setLocation] = useState("");
   const [goalsText, setGoalsText] = useState("");
   const [lastWateredAt, setLastWateredAt] = useState("");
   const [geoCity, setGeoCity] = useState("");
@@ -36,7 +35,6 @@ export default function UploadPage() {
       const formData = new FormData();
       formData.append("image", imageFile);
       if (name) formData.append("name", name);
-      if (location) formData.append("location", location);
       if (goalsText) formData.append("goalsText", goalsText);
       if (lastWateredAt) {
         formData.append("lastWateredAt", new Date(lastWateredAt).toISOString());
@@ -138,19 +136,6 @@ export default function UploadPage() {
           </div>
 
           <div>
-            <Label htmlFor="location" className="text-stone-600">
-              Indoor spot <span className="text-stone-300 font-normal">(optional)</span>
-            </Label>
-            <Input
-              id="location"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="e.g. Living room, South-facing window…"
-              className="mt-1.5"
-            />
-          </div>
-
-          <div>
             <Label className="text-stone-600">
               Geographic location <span className="text-stone-300 font-normal">(optional — improves watering advice)</span>
             </Label>
@@ -228,14 +213,17 @@ export default function UploadPage() {
           </div>
 
           <div>
-            <Label htmlFor="goals" className="text-stone-600">
-              Goals <span className="text-stone-300 font-normal">(optional)</span>
+            <Label htmlFor="initialNotes" className="text-stone-600">
+              Initial Notes <span className="text-stone-300 font-normal">(optional)</span>
             </Label>
+            <p className="text-xs text-stone-400 mt-0.5 mb-2">
+              Anything you add here is included when we run the first identification and care prompts.
+            </p>
             <textarea
-              id="goals"
+              id="initialNotes"
               value={goalsText}
               onChange={(e) => setGoalsText(e.target.value)}
-              placeholder="e.g. I want it to look bushier, fill in on the right side…"
+              placeholder="e.g. New purchase, some yellowing lower leaves, hoping it fills in on the right…"
               className="mt-1.5 w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm text-stone-800 placeholder:text-stone-300 focus:outline-none focus:ring-1 focus:ring-stone-400 resize-none min-h-[80px]"
             />
           </div>

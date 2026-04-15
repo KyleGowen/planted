@@ -27,15 +27,12 @@ export default function PlantsPage() {
     staleTime: 60_000,
   });
 
-  const [locationDraft, setLocationDraft] = useState("");
+  // If the user hasn't edited yet, fall back to the server value directly.
+  // This avoids syncing query data into state via an effect (lint rule).
+  const [locationDraft, setLocationDraft] = useState<string | null>(null);
   const [locationSavedFlash, setLocationSavedFlash] = useState(false);
   const savedFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (locationData !== undefined) {
-      setLocationDraft(locationData.address ?? "");
-    }
-  }, [locationData]);
+  const effectiveLocationDraft = locationDraft ?? (locationData?.address ?? "");
 
   useEffect(() => {
     return () => {
@@ -57,7 +54,7 @@ export default function PlantsPage() {
   });
 
   const handleLocationBlur = () => {
-    const trimmed = locationDraft.trim();
+    const trimmed = effectiveLocationDraft.trim();
     const saved = (locationData?.address ?? "").trim();
     if (trimmed === saved) return;
     saveLocationMutation.mutate({
@@ -106,7 +103,7 @@ export default function PlantsPage() {
             id="user-location"
             rows={2}
             placeholder="e.g. 123 Oak St, Portland, OR"
-            value={locationDraft}
+            value={effectiveLocationDraft}
             onChange={(e) => setLocationDraft(e.target.value)}
             onBlur={handleLocationBlur}
             disabled={saveLocationMutation.isPending}

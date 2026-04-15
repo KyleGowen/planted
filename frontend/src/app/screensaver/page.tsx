@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import Image from "next/image";
@@ -21,9 +21,7 @@ function shuffle<T>(arr: T[]): T[] {
 
 export default function ScreensaverPage() {
   const router = useRouter();
-  const [queue, setQueue] = useState<PlantListItemResponse[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const { data: plants } = useQuery({
     queryKey: ["plants"],
@@ -31,18 +29,15 @@ export default function ScreensaverPage() {
     staleTime: 60_000,
   });
 
-  // Build randomized queue when plants load
-  useEffect(() => {
-    if (plants && plants.length > 0) {
-      setQueue(shuffle(plants));
-      setCurrentIndex(0);
-    }
+  const queue = useMemo<PlantListItemResponse[]>(() => {
+    if (!plants || plants.length === 0) return [];
+    return shuffle(plants);
   }, [plants]);
 
   // Enter fullscreen on mount
   useEffect(() => {
     const el = document.documentElement;
-    el.requestFullscreen?.().then(() => setIsFullscreen(true)).catch(() => {});
+    el.requestFullscreen?.().catch(() => {});
     return () => {
       if (document.fullscreenElement) {
         document.exitFullscreen?.().catch(() => {});
@@ -75,7 +70,7 @@ export default function ScreensaverPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [handleExit]);
 
-  const current = queue[currentIndex];
+  const current = queue.length > 0 ? queue[currentIndex % queue.length] : undefined;
 
   return (
     <div className="fixed inset-0 bg-stone-950 text-white overflow-hidden">
