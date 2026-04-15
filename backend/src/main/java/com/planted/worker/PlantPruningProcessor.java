@@ -5,6 +5,7 @@ import com.planted.client.PruningAnalysisSchema;
 import com.planted.entity.*;
 import com.planted.queue.PlantJobMessage;
 import com.planted.repository.*;
+import com.planted.service.CareHistoryFormatter;
 import com.planted.service.UserPhysicalAddressService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,9 +29,7 @@ public class PlantPruningProcessor {
     private final PlantRepository plantRepository;
     private final PlantAnalysisRepository analysisRepository;
     private final PlantImageRepository imageRepository;
-    private final PlantWateringEventRepository wateringEventRepository;
-    private final PlantFertilizerEventRepository fertilizerEventRepository;
-    private final PlantPruneEventRepository pruneEventRepository;
+    private final CareHistoryFormatter careHistoryFormatter;
     private final PlantHistoryEntryRepository historyEntryRepository;
     private final OpenAiPlantClient openAiClient;
     private final UserPhysicalAddressService userPhysicalAddressService;
@@ -82,7 +81,7 @@ public class PlantPruningProcessor {
             String species = registrationAnalysis != null ? registrationAnalysis.getSpecies() : plant.getSpecies();
             String pruningGuidance = resolveSpeciesPruningGuidance(registrationAnalysis);
 
-            String careHistory = buildCareHistory(plantId);
+            String careHistory = careHistoryFormatter.formatForLlm(plantId);
             String historyNotes = buildHistoryNotes(plantId);
 
             log.info("Running pruning analysis for plant {} with {} image(s)", plantId, imagesBase64.size());
@@ -123,27 +122,6 @@ public class PlantPruningProcessor {
             analysis.setFailureReason(e.getMessage());
             analysisRepository.save(analysis);
         }
-    }
-
-    private String buildCareHistory(Long plantId) {
-        String lastWatered = wateringEventRepository
-                .findFirstByPlantIdOrderByWateredAtDesc(plantId)
-                .map(e -> e.getWateredAt().format(DATE_FMT))
-                .orElse("Never recorded");
-
-        String lastFertilized = fertilizerEventRepository
-                .findFirstByPlantIdOrderByFertilizedAtDesc(plantId)
-                .map(e -> e.getFertilizedAt().format(DATE_FMT))
-                .orElse("Never recorded");
-
-        String lastPruned = pruneEventRepository
-                .findFirstByPlantIdOrderByPrunedAtDesc(plantId)
-                .map(e -> e.getPrunedAt().format(DATE_FMT))
-                .orElse("Never recorded");
-
-        return "Last watered: " + lastWatered + ". "
-                + "Last fertilized: " + lastFertilized + ". "
-                + "Last pruned: " + lastPruned + ".";
     }
 
     /**

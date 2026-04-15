@@ -36,9 +36,7 @@ public class PlantAnalysisProcessor {
     private final PlantRepository plantRepository;
     private final PlantAnalysisRepository analysisRepository;
     private final PlantImageRepository imageRepository;
-    private final PlantWateringEventRepository wateringEventRepository;
-    private final PlantFertilizerEventRepository fertilizerEventRepository;
-    private final PlantPruneEventRepository pruneEventRepository;
+    private final CareHistoryFormatter careHistoryFormatter;
     private final PlantHistoryEntryRepository historyEntryRepository;
     private final OpenAiPlantClient openAiClient;
     private final PlantJobPublisher jobPublisher;
@@ -70,7 +68,7 @@ public class PlantAnalysisProcessor {
             String priorCareContext = buildPriorCareContext(plantId, analysisId);
 
             // Gather care event history
-            String careHistory = buildCareHistory(plantId);
+            String careHistory = careHistoryFormatter.formatForLlm(plantId);
 
             // Gather owner history notes
             String historyNotes = buildHistoryNotes(plantId);
@@ -229,30 +227,6 @@ public class PlantAnalysisProcessor {
                 })
                 .filter(s -> !s.isEmpty())
                 .orElse(null);
-    }
-
-    /**
-     * Builds a formatted care history string from the most recent watering, fertilizer, and prune events.
-     */
-    private String buildCareHistory(Long plantId) {
-        String lastWatered = wateringEventRepository
-                .findFirstByPlantIdOrderByWateredAtDesc(plantId)
-                .map(e -> e.getWateredAt().format(DATE_FMT))
-                .orElse("Never recorded");
-
-        String lastFertilized = fertilizerEventRepository
-                .findFirstByPlantIdOrderByFertilizedAtDesc(plantId)
-                .map(e -> e.getFertilizedAt().format(DATE_FMT))
-                .orElse("Never recorded");
-
-        String lastPruned = pruneEventRepository
-                .findFirstByPlantIdOrderByPrunedAtDesc(plantId)
-                .map(e -> e.getPrunedAt().format(DATE_FMT))
-                .orElse("Never recorded");
-
-        return "Last watered: " + lastWatered + ". "
-                + "Last fertilized: " + lastFertilized + ". "
-                + "Last pruned: " + lastPruned + ".";
     }
 
     /**
