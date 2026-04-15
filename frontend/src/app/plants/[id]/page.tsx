@@ -1011,6 +1011,11 @@ function CarePanel({
               disabled={waterPending}
             />
           </div>
+          {careActionError && (
+            <p className="text-xs text-red-600 leading-snug" role="alert">
+              {careActionError}
+            </p>
+          )}
           <div className="flex justify-end gap-2 pt-1">
             <Button
               type="button"
@@ -1027,54 +1032,6 @@ function CarePanel({
               onClick={() => void submitWaterDialog()}
               disabled={waterPending || !wateredAtLocal || Number.isNaN(new Date(wateredAtLocal).getTime())}
             >
-              {waterPending ? "Saving…" : "Save"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={waterDialogOpen}
-        onOpenChange={(open) => {
-          if (!open && !waterPending) setWaterDialogOpen(false);
-        }}
-      >
-        <DialogContent className="sm:max-w-md" showCloseButton={!waterPending}>
-          <DialogHeader>
-            <DialogTitle>Record watering</DialogTitle>
-          </DialogHeader>
-          <p className="text-xs text-stone-500 leading-snug">
-            Use your local time when the plant was watered. The value is stored as an ISO instant on the server.
-          </p>
-          <div className="space-y-1.5">
-            <Label htmlFor="watered-at-local" className="text-xs text-stone-600">
-              Watered at
-            </Label>
-            <Input
-              id="watered-at-local"
-              type="datetime-local"
-              value={wateredAtLocal}
-              onChange={(e) => setWateredAtLocal(e.target.value)}
-              disabled={waterPending}
-              className="text-sm"
-            />
-          </div>
-          {careActionError && (
-            <p className="text-xs text-red-600 leading-snug" role="alert">
-              {careActionError}
-            </p>
-          )}
-          <div className="flex justify-end gap-2 pt-1">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setWaterDialogOpen(false)}
-              disabled={waterPending}
-            >
-              Cancel
-            </Button>
-            <Button type="button" size="sm" onClick={() => void submitWaterDialog()} disabled={waterPending}>
               {waterPending ? "Saving…" : "Save"}
             </Button>
           </div>
