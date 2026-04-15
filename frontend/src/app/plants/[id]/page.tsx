@@ -17,6 +17,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PlantStatusCard } from "@/components/plant/PlantStatusCard";
 import { ReminderIconRow } from "@/components/plant/ReminderIconRow";
@@ -84,8 +86,11 @@ export default function PlantDetailPage() {
   });
 
   const waterMutation = useMutation({
-    mutationFn: () => recordWatering(plantId, { wateredAt: new Date().toISOString() }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["plant", plantId] }),
+    mutationFn: (wateredAt: string) => recordWatering(plantId, { wateredAt }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["plant", plantId] });
+      queryClient.invalidateQueries({ queryKey: ["plants"] });
+    },
   });
 
   const fertMutation = useMutation({
@@ -532,7 +537,8 @@ export default function PlantDetailPage() {
                 placementMutation.error instanceof Error ? placementMutation.error.message : null
               }
               onPlacementDialogOpen={() => placementMutation.reset()}
-              onWater={() => waterMutation.mutate()}
+              commitWatering={(iso) => waterMutation.mutateAsync(iso)}
+              onWaterDialogOpen={() => waterMutation.reset()}
               onFertilize={() => fertMutation.mutate()}
               onPrune={() => pruneMutation.mutate()}
               waterPending={waterMutation.isPending}
@@ -570,6 +576,11 @@ export default function PlantDetailPage() {
 }
 
 // ── Sub-components ───────────────────────────────────────────────────────────
+
+function toDatetimeLocalValue(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 function ThumbImage({ img, sameAsHero }: { img: PlantImageDto; sameAsHero?: boolean }) {
   return (
@@ -810,7 +821,8 @@ function CarePanel({
   placementSavePending,
   placementSaveError,
   onPlacementDialogOpen,
-  onWater,
+  commitWatering,
+  onWaterDialogOpen,
   onFertilize,
   onPrune,
   waterPending,
@@ -835,7 +847,8 @@ function CarePanel({
   placementSavePending: boolean;
   placementSaveError: string | null;
   onPlacementDialogOpen: () => void;
-  onWater: () => void;
+  commitWatering: (wateredAtIso: string) => Promise<unknown>;
+  onWaterDialogOpen: () => void;
   onFertilize: () => void;
   onPrune: () => void;
   waterPending: boolean;
@@ -855,6 +868,8 @@ function CarePanel({
 }) {
   const [placementDialogOpen, setPlacementDialogOpen] = useState(false);
   const [placementInput, setPlacementInput] = useState("");
+  const [waterDialogOpen, setWaterDialogOpen] = useState(false);
+  const [wateredAtLocal, setWateredAtLocal] = useState("");
   const ready = analysis?.status === "COMPLETED";
   const pg = analysis?.placementGuidance?.trim();
   const pgG = analysis?.placementGeneralGuidance?.trim();
@@ -883,6 +898,23 @@ function CarePanel({
       setPlacementDialogOpen(false);
     } catch {
       /* error shown via placementSaveError */
+    }
+  }
+
+  function openWaterDialog() {
+    onWaterDialogOpen();
+    setWateredAtLocal(toDatetimeLocalValue(new Date()));
+    setWaterDialogOpen(true);
+  }
+
+  async function submitWaterDialog() {
+    const parsed = new Date(wateredAtLocal);
+    if (Number.isNaN(parsed.getTime())) return;
+    try {
+      await commitWatering(parsed.toISOString());
+      setWaterDialogOpen(false);
+    } catch {
+      /* error shown via careActionError */
     }
   }
 
@@ -948,6 +980,102 @@ function CarePanel({
             </Button>
             <Button type="button" size="sm" onClick={() => void submitPlacementDialog()} disabled={placementSavePending}>
               {placementSavePending ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={waterDialogOpen}
+        onOpenChange={(open) => {
+          if (!waterPending) setWaterDialogOpen(open);
+        }}
+      >
+        <DialogContent className="sm:max-w-md" showCloseButton={!waterPending}>
+          <DialogHeader>
+            <DialogTitle>Record watering</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-stone-500 leading-snug">
+            When did you water? This updates reminders and is included in care history for future analysis.
+          </p>
+          <div>
+            <Label htmlFor="watered-at" className="text-stone-600 text-xs">
+              Date and time
+            </Label>
+            <Input
+              id="watered-at"
+              type="datetime-local"
+              value={wateredAtLocal}
+              onChange={(e) => setWateredAtLocal(e.target.value)}
+              className="mt-1.5"
+              disabled={waterPending}
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setWaterDialogOpen(false)}
+              disabled={waterPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => void submitWaterDialog()}
+              disabled={waterPending || !wateredAtLocal || Number.isNaN(new Date(wateredAtLocal).getTime())}
+            >
+              {waterPending ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={waterDialogOpen}
+        onOpenChange={(open) => {
+          if (!open && !waterPending) setWaterDialogOpen(false);
+        }}
+      >
+        <DialogContent className="sm:max-w-md" showCloseButton={!waterPending}>
+          <DialogHeader>
+            <DialogTitle>Record watering</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-stone-500 leading-snug">
+            Use your local time when the plant was watered. The value is stored as an ISO instant on the server.
+          </p>
+          <div className="space-y-1.5">
+            <Label htmlFor="watered-at-local" className="text-xs text-stone-600">
+              Watered at
+            </Label>
+            <Input
+              id="watered-at-local"
+              type="datetime-local"
+              value={wateredAtLocal}
+              onChange={(e) => setWateredAtLocal(e.target.value)}
+              disabled={waterPending}
+              className="text-sm"
+            />
+          </div>
+          {careActionError && (
+            <p className="text-xs text-red-600 leading-snug" role="alert">
+              {careActionError}
+            </p>
+          )}
+          <div className="flex justify-end gap-2 pt-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setWaterDialogOpen(false)}
+              disabled={waterPending}
+            >
+              Cancel
+            </Button>
+            <Button type="button" size="sm" onClick={() => void submitWaterDialog()} disabled={waterPending}>
+              {waterPending ? "Saving…" : "Save"}
             </Button>
           </div>
         </DialogContent>
@@ -1028,7 +1156,7 @@ function CarePanel({
         <div className="grid grid-cols-3 gap-2">
           <Button
             variant="outline" size="sm"
-            onClick={onWater} disabled={waterPending}
+            onClick={openWaterDialog} disabled={waterPending}
             className="text-sky-600 border-sky-200 hover:bg-sky-50 text-xs"
           >
             <Droplets size={13} className="mr-1" />

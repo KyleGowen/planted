@@ -59,6 +59,7 @@ Recompute `PlantReminderState` whenever:
 - Registration analysis completes
 - Reanalysis completes
 - **`PATCH /api/plants/{id}/growing`** (growing context or coordinates change)
+- **`PATCH /api/plants/{id}/placement`** (updates `plants.location` placement seed and enqueues **`PLANT_REANALYSIS`** — same async path as **POST** `/{id}/reanalysis`)
 - **`OutdoorReminderRefreshScheduler`** (cron) for active **outdoor** plants with lat/lon — enqueues `PLANT_REMINDER_RECOMPUTE` so weather-informed copy can refresh without a care event
 
 Outdoor recomputes may call **`WeatherService`** (Open-Meteo by default); disable with `planted.weather.enabled=false`. Persisted fields include optional **`weather_care_note`** on `plant_reminder_state`.

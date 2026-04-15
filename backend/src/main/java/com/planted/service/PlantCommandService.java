@@ -142,7 +142,7 @@ public class PlantCommandService {
 
     @Transactional
     public void recordWatering(Long plantId, RecordWateringRequest request) {
-        Plant plant = findActivePlant(plantId);
+        findActivePlant(plantId);
         PlantWateringEvent event = PlantWateringEvent.builder()
                 .plantId(plantId)
                 .wateredAt(request.wateredAt())

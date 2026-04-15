@@ -12,3 +12,5 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - **Images:** DTOs may use root-relative `/images/...`; **`PlantImageStrip`** must treat **`/`** URLs like app-hosted images (not only `http:`).
 - **Shipping:** If the user says **ship**, update **README** / this file when conventions change, and follow **`scripts/ship-checklist.md`** + **`.cursor/rules/ship.mdc`**.
 - **Plant detail types:** `PlantDetailResponse` may include **`historyDailyDigests`** (preferred History tiles in About when non-empty); align `src/types/plant.ts` with the backend contract.
+- **Plant detail journal UI:** Text and optional photo for observations live at the **bottom of the Care** panel (`addHistoryNote` / `addHistoryImage`); the About **History** block shows the merged timeline (digests, summary, and structured `historyEntries`).
+- **Placement seed:** `updatePlantPlacement` → **`PATCH /api/plants/{id}/placement`** (202 + same body shape as reanalysis). The Care panel edits `location` via the Placement pencil dialog; do not show raw seed as duplicate body copy next to `placementGuidance`.
