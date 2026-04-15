@@ -14,10 +14,12 @@ import java.util.List;
 public class PlantAnalysisSchema {
 
     private String className;
+    /** Botanical family; empty string when unknown. */
+    private String taxonomicFamily;
     private String genus;
+    /** Specific epithet only (second part of binomial), not the full binomial. */
     private String species;
     private String variety;
-    private String scientificName;
     private String confidence;
 
     private List<String> nativeRegions;

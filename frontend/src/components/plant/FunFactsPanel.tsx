@@ -1,7 +1,7 @@
 "use client";
 
 import { Globe, ScrollText, Utensils } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { SpeciesOverviewProse } from "@/components/plant/SpeciesOverviewProse";
 import type { AnalysisSummaryDto } from "@/types/plant";
 
@@ -13,9 +13,6 @@ export function FunFactsPanel({ analysis }: Props) {
   if (!analysis || analysis.status !== "COMPLETED") {
     return (
       <Card className="border-stone-200">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-stone-500">About This Plant</CardTitle>
-        </CardHeader>
         <CardContent>
           <p className="text-sm text-stone-400 italic">Species profile is being prepared…</p>
         </CardContent>
@@ -25,9 +22,6 @@ export function FunFactsPanel({ analysis }: Props) {
 
   return (
     <Card className="border-stone-200">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-stone-600">About This Plant</CardTitle>
-      </CardHeader>
       <CardContent className="space-y-4">
         {analysis.nativeRegions && analysis.nativeRegions.length > 0 && (
           <FactRow

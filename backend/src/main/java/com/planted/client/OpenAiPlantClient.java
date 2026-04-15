@@ -390,7 +390,7 @@ public class OpenAiPlantClient {
     private Map<String, Object> registrationSchema() {
         // strict: true requires every property to be in "required" and additionalProperties: false
         List<String> allFields = List.of(
-                "className", "genus", "species", "variety", "scientificName", "confidence",
+                "className", "taxonomicFamily", "genus", "species", "variety", "confidence",
                 "nativeRegions", "lightNeeds", "lightGeneralGuidance",
                 "placementGuidance", "placementGeneralGuidance",
                 "wateringAmount", "wateringFrequency", "wateringGuidance",
@@ -416,6 +416,34 @@ public class OpenAiPlantClient {
                                 + "nativeRegions verbatim, horticultural role, brief indoor context without "
                                 + "repeating structured care schedules; conservative pest/disease mentions; "
                                 + "state uncertainty clearly if identification is weak."
+                ));
+            } else if (field.equals("taxonomicFamily")) {
+                properties.put(field, Map.of(
+                        "type", "string",
+                        "description",
+                        "Botanical family when confidently known from the identification "
+                                + "(e.g. Asparagaceae). Empty string if unknown or uncertain. Do not prefix with "
+                                + "the word 'Family'."
+                ));
+            } else if (field.equals("genus")) {
+                properties.put(field, Map.of(
+                        "type", "string",
+                        "description",
+                        "Latin genus when known (e.g. Dracaena). Empty string if not narrowed beyond a higher rank."
+                ));
+            } else if (field.equals("species")) {
+                properties.put(field, Map.of(
+                        "type", "string",
+                        "description",
+                        "ONLY the specific epithet—the second part of the binomial (e.g. trifasciata)—"
+                                + "not the full binomial. Lowercase for Latin epithets. Empty string if unknown."
+                ));
+            } else if (field.equals("variety")) {
+                properties.put(field, Map.of(
+                        "type", "string",
+                        "description",
+                        "Botanical variety, subspecies, or unambiguous cultivar/group when supported by evidence; "
+                                + "otherwise empty string."
                 ));
             } else if (field.equals("lightNeeds")) {
                 properties.put(field, Map.of(

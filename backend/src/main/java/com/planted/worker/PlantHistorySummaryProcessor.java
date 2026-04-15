@@ -8,6 +8,7 @@ import com.planted.repository.*;
 import com.planted.service.HistorySummaryDayZoneResolver;
 import com.planted.service.PlantHistorySummaryPersistenceHelper;
 import com.planted.service.UserPhysicalAddressService;
+import com.planted.util.TaxonomicDisplayFormatter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -119,7 +120,7 @@ public class PlantHistorySummaryProcessor {
 
             String imageCountLabel = buildImageCountLabel(baselineResult.baselineAttached(), journalPhotos.size());
             String speciesLabel = plant.getSpeciesLabel() != null ? plant.getSpeciesLabel()
-                    : PlantHistorySummaryProcessor.buildSpeciesLabel(plant.getGenus(), plant.getSpecies());
+                    : resolveTaxonHeadingForPrompt(plant);
 
             log.info("Running plant history summary for plant {} ({} image(s) to model)",
                     plantId, imagesBase64.size());
@@ -253,17 +254,13 @@ public class PlantHistorySummaryProcessor {
         }
     }
 
-    private static String buildSpeciesLabel(String genus, String species) {
-        if (genus == null && species == null) {
-            return null;
+    private static String resolveTaxonHeadingForPrompt(Plant plant) {
+        String line = TaxonomicDisplayFormatter.formatLine(
+                plant.getTaxonomicFamily(), plant.getGenus(), plant.getSpecies(), plant.getVariety());
+        if (line == null) {
+            line = TaxonomicDisplayFormatter.formatBinomial(plant.getGenus(), plant.getSpecies());
         }
-        if (species == null) {
-            return genus;
-        }
-        if (genus == null) {
-            return species;
-        }
-        return genus + " " + species;
+        return line != null ? line : "";
     }
 
     private record BaselineAttachResult(

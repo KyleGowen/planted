@@ -4,6 +4,7 @@ import com.planted.dto.*;
 import com.planted.entity.*;
 import com.planted.repository.PlantImageRepository;
 import com.planted.storage.ImageStorageService;
+import com.planted.util.TaxonomicDisplayFormatter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -58,6 +59,7 @@ public class PlantMapper {
                 analysis.getGenus(),
                 analysis.getSpecies(),
                 analysis.getVariety(),
+                analysis.getTaxonomicFamily(),
                 analysis.getScientificName(),
                 analysis.getConfidence(),
                 analysis.getNativeRegionsJson(),
@@ -159,10 +161,15 @@ public class PlantMapper {
             PlantReminderState reminderState,
             String analysisStatus) {
 
+        String taxonFallback = TaxonomicDisplayFormatter.formatLine(
+                plant.getTaxonomicFamily(), plant.getGenus(), plant.getSpecies(), plant.getVariety());
+        if (taxonFallback == null) {
+            taxonFallback = TaxonomicDisplayFormatter.formatBinomial(plant.getGenus(), plant.getSpecies());
+        }
         String displayLabel = plant.getName() != null
                 ? plant.getName()
                 : plant.getSpeciesLabel() != null ? plant.getSpeciesLabel()
-                : buildSpeciesLabel(plant.getGenus(), plant.getSpecies());
+                : taxonFallback != null ? taxonFallback : "Unknown Plant";
 
         return new PlantListItemResponse(
                 plant.getId(),
@@ -297,12 +304,5 @@ public class PlantMapper {
 
     private static boolean notBlank(String s) {
         return s != null && !s.isBlank();
-    }
-
-    private String buildSpeciesLabel(String genus, String species) {
-        if (genus == null && species == null) return "Unknown Plant";
-        if (species == null) return genus;
-        if (genus == null) return species;
-        return genus + " " + species;
     }
 }

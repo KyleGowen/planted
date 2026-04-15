@@ -4,6 +4,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useState } from "react";
 
+/** TanStack Query Devtools (floating icon): opt-in via NEXT_PUBLIC_QUERY_DEVTOOLS=true in .env.local */
+const showReactQueryDevtools =
+  process.env.NODE_ENV === "development" &&
+  process.env.NEXT_PUBLIC_QUERY_DEVTOOLS === "true";
+
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
     () =>
@@ -20,7 +25,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       {children}
-      <ReactQueryDevtools initialIsOpen={false} />
+      {showReactQueryDevtools ? (
+        <ReactQueryDevtools initialIsOpen={false} />
+      ) : null}
     </QueryClientProvider>
   );
 }

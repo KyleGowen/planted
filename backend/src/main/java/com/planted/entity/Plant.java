@@ -79,6 +79,10 @@ public class Plant {
     @Column(name = "class_name")
     private String className;
 
+    /** Botanical family when known; mirrors latest analysis for quick reads. */
+    @Column(name = "taxonomic_family")
+    private String taxonomicFamily;
+
     @Column(name = "health_attention_needed", nullable = false)
     private boolean healthAttentionNeeded = false;
 

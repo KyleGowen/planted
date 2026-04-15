@@ -49,6 +49,27 @@ import {
   type TimelineRow,
 } from "@/lib/historyDayTimeline";
 
+const INDOOR_PLACEMENT_SNIPPET_MAX = 56;
+
+/** First line of placement notes, trimmed — used beside "Indoor" in the header. */
+function summarizeIndoorPlacementLabel(location: string | null | undefined): string | null {
+  const raw = location?.trim();
+  if (!raw) return null;
+  const firstLine = raw.split(/\r\n|\n|\r/)[0].trim();
+  if (!firstLine) return null;
+  const withoutIndoorEcho = stripRedundantIndoorPrefix(firstLine);
+  const cleaned = withoutIndoorEcho.replace(/\s+/g, " ").trim();
+  if (!cleaned) return null;
+  if (cleaned.length <= INDOOR_PLACEMENT_SNIPPET_MAX) return cleaned;
+  return `${cleaned.slice(0, INDOOR_PLACEMENT_SNIPPET_MAX - 1).trimEnd()}…`;
+}
+
+function stripRedundantIndoorPrefix(text: string): string {
+  const t = text.trim();
+  const stripped = t.replace(/^(indoor|inside)\s*[:,]?\s*/i, "").trim();
+  return stripped.length > 0 ? stripped : t;
+}
+
 export default function PlantDetailPage() {
   const { id } = useParams<{ id: string }>();
   const plantId = Number(id);
@@ -235,6 +256,10 @@ export default function PlantDetailPage() {
     plant.speciesLabel?.trim() ||
     analysis?.scientificName?.trim() ||
     [plant.genus, plant.species].filter(Boolean).join(" ");
+  const indoorPlacementSnippet =
+    (plant.growingContext ?? "INDOOR") === "INDOOR"
+      ? summarizeIndoorPlacementLabel(plant.location)
+      : null;
 
   return (
     <main className="h-[100dvh] overflow-hidden flex flex-col relative px-3 py-2">
@@ -405,26 +430,28 @@ export default function PlantDetailPage() {
                   </p>
                 </div>
               )}
-              <div className="flex flex-col items-end gap-0.5">
-                <p className="text-[10px] font-medium uppercase tracking-wide text-stone-400">
-                  Growing &amp; local weather
-                </p>
-                <div className="flex items-baseline justify-end gap-2 flex-wrap">
-                  <p className="text-xs text-stone-500 leading-snug">
+              <div className="group flex items-start justify-end gap-1.5 text-right">
+                <button
+                  type="button"
+                  onClick={startEditGrowing}
+                  className="p-0.5 rounded-full text-stone-300 hover:text-stone-500 hover:bg-stone-100 transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
+                  title="Edit growing environment and coordinates"
+                >
+                  <Pencil size={13} />
+                </button>
+                <div className="min-w-0 text-xs text-stone-500 leading-snug">
+                  <p>
                     {(plant.growingContext ?? "INDOOR") === "OUTDOOR" ? "Outdoor" : "Indoor"}
+                    {indoorPlacementSnippet ? ` · ${indoorPlacementSnippet}` : ""}
                     {plant.latitude != null && plant.longitude != null
                       ? " · Coords on file"
                       : (plant.growingContext ?? "INDOOR") === "OUTDOOR"
                         ? " · Add coords for weather reminders"
                         : ""}
                   </p>
-                  <button
-                    type="button"
-                    onClick={startEditGrowing}
-                    className="text-xs font-medium text-stone-500 hover:text-stone-800 flex-shrink-0"
-                  >
-                    Edit
-                  </button>
+                  {plant.reminderState?.weatherCareNote && (
+                    <p className="mt-1 text-xs text-stone-500 leading-snug">{plant.reminderState.weatherCareNote}</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -1290,7 +1317,7 @@ function PlacementCareRow({
   editDisabled?: boolean;
 }) {
   return (
-    <div className="flex gap-2 text-sm text-stone-600">
+    <div className="group flex gap-2 text-sm text-stone-600">
       <span className="mt-0.5 flex-shrink-0">{icon}</span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2 mb-0.5">
@@ -1299,7 +1326,7 @@ function PlacementCareRow({
             type="button"
             onClick={onEdit}
             disabled={editDisabled}
-            className="p-0.5 rounded-full text-stone-300 hover:text-stone-500 hover:bg-stone-100 transition-colors disabled:opacity-40 flex-shrink-0"
+            className="p-0.5 rounded-full text-stone-300 hover:text-stone-500 hover:bg-stone-100 transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0 disabled:pointer-events-none disabled:opacity-0"
             title="Edit placement notes"
           >
             <Pencil size={13} />

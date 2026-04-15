@@ -10,6 +10,7 @@ public record AnalysisSummaryDto(
         String genus,
         String species,
         String variety,
+        String taxonomicFamily,
         String scientificName,
         String confidence,
         List<String> nativeRegions,

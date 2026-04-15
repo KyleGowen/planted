@@ -46,7 +46,8 @@ com.planted.
 
 ## Data Rules
 - Normalize high-value app fields into columns on `plant_analyses`
-- Registration structured output includes paired strings for light, placement, and pruning (primary + `*GeneralGuidance` / `pruningActionSummary` + `pruningGeneralGuidance`); `latestAnalysis` in plant detail mirrors `AnalysisSummaryDto`
+- Registration JSON schema includes **`taxonomicFamily`** (botanical family), genus, specific epithet, and variety; the worker persists **`taxonomic_family`** on `plant_analyses` and `plants` and sets **`scientific_name`** / **`species_label`** to the composed **Family Genus epithet variety** line via **`TaxonomicDisplayFormatter`**
+- Registration structured output includes paired strings for light, placement, and pruning (primary + `*GeneralGuidance` / `pruningActionSummary` + `pruningGeneralGuidance`); `latestAnalysis` in plant detail mirrors `AnalysisSummaryDto` (includes `taxonomicFamily`)
 - Store raw model output in `rawModelResponseJsonb JSONB`
 - Histories (`watering`, `fertilizer`, `prune`) are first-class tables, not embedded JSON
 - Analysis status lifecycle: `PENDING → PROCESSING → COMPLETED | FAILED`

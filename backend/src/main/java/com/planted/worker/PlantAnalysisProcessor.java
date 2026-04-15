@@ -9,6 +9,7 @@ import com.planted.repository.*;
 import com.planted.service.CareHistoryFormatter;
 import com.planted.service.UserPhysicalAddressService;
 import com.planted.storage.ImageStorageService;
+import com.planted.util.TaxonomicDisplayFormatter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -86,10 +87,16 @@ public class PlantAnalysisProcessor {
 
             // Write normalized fields
             analysis.setClassName(result.getClassName());
+            analysis.setTaxonomicFamily(trimOrNull(result.getTaxonomicFamily()));
             analysis.setGenus(result.getGenus());
             analysis.setSpecies(result.getSpecies());
             analysis.setVariety(result.getVariety());
-            analysis.setScientificName(result.getScientificName());
+            String heading = TaxonomicDisplayFormatter.formatLine(
+                    result.getTaxonomicFamily(), result.getGenus(), result.getSpecies(), result.getVariety());
+            if (heading == null) {
+                heading = TaxonomicDisplayFormatter.formatBinomial(result.getGenus(), result.getSpecies());
+            }
+            analysis.setScientificName(heading);
             analysis.setConfidence(result.getConfidence());
             analysis.setNativeRegionsJson(result.getNativeRegions());
             analysis.setLightNeeds(result.getLightNeeds());
@@ -113,8 +120,11 @@ public class PlantAnalysisProcessor {
 
             // Store raw response in JSONB for future prompt iteration
             Map<String, Object> rawResponse = new HashMap<>();
+            rawResponse.put("taxonomicFamily", result.getTaxonomicFamily());
             rawResponse.put("genus", result.getGenus());
             rawResponse.put("species", result.getSpecies());
+            rawResponse.put("variety", result.getVariety());
+            rawResponse.put("scientificName", heading);
             rawResponse.put("confidence", result.getConfidence());
             analysis.setRawModelResponseJsonb(rawResponse);
 
@@ -126,8 +136,9 @@ public class PlantAnalysisProcessor {
             if (result.getGenus() != null) plant.setGenus(result.getGenus());
             if (result.getSpecies() != null) plant.setSpecies(result.getSpecies());
             if (result.getVariety() != null) plant.setVariety(result.getVariety());
-            if (result.getGenus() != null || result.getSpecies() != null) {
-                plant.setSpeciesLabel(buildSpeciesLabel(result.getGenus(), result.getSpecies()));
+            plant.setTaxonomicFamily(analysis.getTaxonomicFamily());
+            if (heading != null) {
+                plant.setSpeciesLabel(heading);
             }
             boolean hasHealthIssue = result.getHealthDiagnosis() != null
                     && !result.getHealthDiagnosis().isBlank()
@@ -185,11 +196,11 @@ public class PlantAnalysisProcessor {
         }
     }
 
-    private String buildSpeciesLabel(String genus, String species) {
-        if (genus == null && species == null) return null;
-        if (species == null) return genus;
-        if (genus == null) return species;
-        return genus + " " + species;
+    private static String trimOrNull(String s) {
+        if (s == null || s.isBlank()) {
+            return null;
+        }
+        return s.trim();
     }
 
     /**
@@ -205,6 +216,7 @@ public class PlantAnalysisProcessor {
                         && !a.getId().equals(currentAnalysisId))
                 .map(a -> {
                     StringBuilder sb = new StringBuilder();
+                    appendIfPresent(sb, "Taxonomic heading", a.getScientificName());
                     appendIfPresent(sb, "Light needs (summary)", a.getLightNeeds());
                     appendIfPresent(sb, "Light (general guidance)", a.getLightGeneralGuidance());
                     appendIfPresent(sb, "Placement (tailored)", a.getPlacementGuidance());

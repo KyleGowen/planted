@@ -38,6 +38,8 @@ export interface AnalysisSummaryDto {
   genus: string | null;
   species: string | null;
   variety: string | null;
+  /** Botanical family, e.g. Asparagaceae, when known. */
+  taxonomicFamily: string | null;
   scientificName: string | null;
   className: string | null;
   confidence: string | null;

@@ -42,7 +42,7 @@ POST /api/plants  →  202 Accepted immediately
                          │
                          ├── [Worker] PLANT_REGISTRATION_ANALYSIS
                          │         └─ OpenAI Responses API (image + structured output)
-                         │         └─ Writes genus/species/care fields + JSONB
+                         │         └─ Writes taxonomy (family + genus + epithet + variety), derived species heading, care fields + JSONB
                          │         └─ Enqueues PLANT_REMINDER_RECOMPUTE
                          │
                          └── [Worker] PLANT_ILLUSTRATION_GENERATION
@@ -126,7 +126,7 @@ If you intend **code only** with no doc/context pass, say so explicitly (e.g. �
 The plant detail page is a fixed-height, no-scroll landscape layout designed for web app use. It fills the full viewport (`100dvh`) with two columns:
 
 - **Left column (34%):** Hero photo (fills available height) → Reference + Photo history thumbnails only.
-- **Right column (flex-1):** Name/species/location header → PlantStatusCard → **Growing & local weather** (indoor/outdoor + optional lat/lon) → About This Plant + Care panels side-by-side (both scroll internally, bottoms align with thumbnail row). The **History** block in About can show **per-day LLM digests** (`historyDailyDigests` from the latest completed summary job) when present; otherwise it falls back to mingling structured `historyEntries` with legacy parsed summary text. **Refresh summary** re-runs the async history job (requires `OPENAI_API_KEY`). The **Care** panel ends with a compact **observation** box (text note, optional photo with caption) so journal-style entries still land in `historyEntries` and appear in that History section; propagation tips are not shown in About.
+- **Right column (flex-1):** Name/species/location header → PlantStatusCard → compact **growing** line (indoor/outdoor, optional snippet from placement notes when indoor, coords hints, optional `weatherCareNote`) → species + Care panels side-by-side (both scroll internally, bottoms align with thumbnail row). The **History** block in About can show **per-day LLM digests** (`historyDailyDigests` from the latest completed summary job) when present; otherwise it falls back to mingling structured `historyEntries` with legacy parsed summary text. **Refresh summary** re-runs the async history job (requires `OPENAI_API_KEY`). The **Care** panel ends with a compact **observation** box (text note, optional photo with caption) so journal-style entries still land in `historyEntries` and appear in that History section; propagation tips are not shown in About.
 
 The back link (`← All plants`) is absolutely positioned so it doesn't consume layout space.
 
@@ -245,7 +245,7 @@ For local dev, the `LocalPlantJobPublisher` publishes Spring `ApplicationEvent`s
 Prompts are versioned in the `llm_prompts` table (seeded by `V6__create_llm_prompts.sql`). Every OpenAI call is audited in `llm_requests` with the rendered prompt and response — enabling full debuggability and future prompt iteration without losing history.
 
 Prompt keys:
-- `plant_registration_analysis_v1` — species ID + care guidance (versioned in DB; structured output includes layered light/placement/pruning fields, with `pruningActionSummary` requiring when and how much for the individual plant). Owner free-text on `plants.location` is rendered as **placement notes** in the user prompt (context for `placementGuidance` / `placementGeneralGuidance`; current version instructs the model to synthesize and not quote that text verbatim). When the user has saved a home/growing-site address (`user_physical_addresses`), the rendered registration user prompt includes it as climate context (typical regional seasons only—not live weather).
+- `plant_registration_analysis_v1` — species ID + care guidance (versioned in DB; structured JSON includes **`taxonomicFamily`** plus genus and specific epithet, layered light/placement/pruning fields, with `pruningActionSummary` requiring when and how much for the individual plant). The worker composes the persisted species heading as **Family Genus epithet variety** (blanks omitted). Owner free-text on `plants.location` is rendered as **placement notes** in the user prompt (context for `placementGuidance` / `placementGeneralGuidance`; current version instructs the model to synthesize and not quote that text verbatim). When the user has saved a home/growing-site address (`user_physical_addresses`), the rendered registration user prompt includes it as climate context (typical regional seasons only—not live weather).
 - `plant_info_panel_v1` — species facts, history, uses
 - `plant_reminder_recompute_v1` — care scheduling
 - `pruning_analysis_v1` — conservative pruning guidance from photos
@@ -255,7 +255,7 @@ Prompt keys:
 
 ## Database Schema
 
-Versioned SQL migrations live in `backend/src/main/resources/db/migration/` (`V__*.sql`). Flyway applies them on startup. See that directory for the current set (plants, images, analyses—including paired care guidance columns on `plant_analyses`, events, reminders, LLM audit, history, species overview, history summary, **`user_physical_addresses`**, etc.).
+Versioned SQL migrations live in `backend/src/main/resources/db/migration/` (`V__*.sql`). Flyway applies them on startup. See that directory for the current set (plants, images, analyses—including paired care guidance columns on `plant_analyses`, **`taxonomic_family`** on plants and analyses, events, reminders, LLM audit, history, species overview, history summary, **`user_physical_addresses`**, etc.).
 
 ---
 

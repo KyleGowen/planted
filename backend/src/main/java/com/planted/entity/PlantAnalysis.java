@@ -38,6 +38,10 @@ public class PlantAnalysis {
     @Column(name = "class_name")
     private String className;
 
+    /** Botanical family, e.g. Asparagaceae — for display with genus, epithet, and variety. */
+    @Column(name = "taxonomic_family")
+    private String taxonomicFamily;
+
     @Column(name = "genus")
     private String genus;
 
