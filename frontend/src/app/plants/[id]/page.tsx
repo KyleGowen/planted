@@ -43,6 +43,7 @@ import type {
   PlantImageDto,
 } from "@/types/plant";
 import { SpeciesOverviewProse } from "@/components/plant/SpeciesOverviewProse";
+import { CareTopicAccordion } from "@/components/plant/CareTopicAccordion";
 import {
   buildHistoryDayTiles,
   formatDayTileTitle,
@@ -903,6 +904,7 @@ function CarePanel({
   const [placementInput, setPlacementInput] = useState("");
   const [waterDialogOpen, setWaterDialogOpen] = useState(false);
   const [wateredAtLocal, setWateredAtLocal] = useState("");
+  const [expandedCareTopicId, setExpandedCareTopicId] = useState<string | null>(null);
   const ready = analysis?.status === "COMPLETED";
   const pg = analysis?.placementGuidance?.trim();
   const pgG = analysis?.placementGeneralGuidance?.trim();
@@ -952,14 +954,28 @@ function CarePanel({
   }
 
   const placementRow = showPlacement ? (
-    <PlacementCareRow
+    <CareTopicAccordion
       icon={<MapPin size={14} className="text-stone-400" />}
       label="Placement"
       value={placementPrimary}
       valueMuted={placementValueMuted}
       detail={placementDetail}
-      onEdit={openPlacementDialog}
-      editDisabled={placementSavePending}
+      actionNeeded={false}
+      isOpen={expandedCareTopicId === "placement"}
+      onToggle={() =>
+        setExpandedCareTopicId((cur) => (cur === "placement" ? null : "placement"))
+      }
+      headerAccessory={
+        <button
+          type="button"
+          onClick={openPlacementDialog}
+          disabled={placementSavePending}
+          className="p-0.5 rounded-full text-stone-300 hover:text-stone-500 hover:bg-stone-100 transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0 disabled:pointer-events-none disabled:opacity-0"
+          title="Edit placement notes"
+        >
+          <Pencil size={13} />
+        </button>
+      }
     />
   ) : null;
 
@@ -1079,11 +1095,18 @@ function CarePanel({
       ) : (
         <div className="space-y-2">
           {reminderState?.nextWateringInstruction && (
-            <CareRow
+            <CareTopicAccordion
               icon={<Droplets size={14} className="text-sky-500" />}
               label="Watering"
               value={reminderState.nextWateringInstruction}
               highlight={reminderState.wateringDue || reminderState.wateringOverdue}
+              actionNeeded={
+                Boolean(reminderState.wateringDue || reminderState.wateringOverdue)
+              }
+              isOpen={expandedCareTopicId === "watering"}
+              onToggle={() =>
+                setExpandedCareTopicId((cur) => (cur === "watering" ? null : "watering"))
+              }
               detail={[
                 analysis?.wateringFrequency ? `Frequency: ${analysis.wateringFrequency}` : null,
                 analysis?.wateringGuidance ?? null,
@@ -1091,11 +1114,16 @@ function CarePanel({
             />
           )}
           {reminderState?.nextFertilizerInstruction && (
-            <CareRow
+            <CareTopicAccordion
               icon={<Leaf size={14} className="text-amber-600" />}
               label="Fertilizer"
               value={reminderState.nextFertilizerInstruction}
               highlight={reminderState.fertilizerDue}
+              actionNeeded={Boolean(reminderState.fertilizerDue)}
+              isOpen={expandedCareTopicId === "fertilizer"}
+              onToggle={() =>
+                setExpandedCareTopicId((cur) => (cur === "fertilizer" ? null : "fertilizer"))
+              }
               detail={[
                 analysis?.fertilizerGuidance,
                 analysis?.fertilizerFrequency ? `Frequency: ${analysis.fertilizerFrequency}` : null,
@@ -1103,11 +1131,16 @@ function CarePanel({
             />
           )}
           {reminderState?.nextPruningInstruction && (
-            <CareRow
+            <CareTopicAccordion
               icon={<Scissors size={14} className="text-green-600" />}
               label="Pruning"
               value={reminderState.nextPruningInstruction}
               highlight={reminderState.pruningDue}
+              actionNeeded={Boolean(reminderState.pruningDue)}
+              isOpen={expandedCareTopicId === "pruning"}
+              onToggle={() =>
+                setExpandedCareTopicId((cur) => (cur === "pruning" ? null : "pruning"))
+              }
               detail={analysis?.pruningGeneralGuidance ?? undefined}
             />
           )}
@@ -1118,10 +1151,15 @@ function CarePanel({
             </div>
           )}
           {analysis?.lightNeeds && (
-            <CareRow
+            <CareTopicAccordion
               icon={<Sun size={14} className="text-amber-400" />}
               label="Light"
               value={analysis.lightNeeds}
+              actionNeeded={false}
+              isOpen={expandedCareTopicId === "light"}
+              onToggle={() =>
+                setExpandedCareTopicId((cur) => (cur === "light" ? null : "light"))
+              }
               detail={analysis?.lightGeneralGuidance ?? undefined}
             />
           )}
@@ -1295,67 +1333,6 @@ function CareObservationInput({
             </button>
           </div>
         </div>
-    </div>
-  );
-}
-
-function PlacementCareRow({
-  icon,
-  label,
-  value,
-  valueMuted,
-  detail,
-  onEdit,
-  editDisabled,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  valueMuted: boolean;
-  detail?: string;
-  onEdit: () => void;
-  editDisabled?: boolean;
-}) {
-  return (
-    <div className="group flex gap-2 text-sm text-stone-600">
-      <span className="mt-0.5 flex-shrink-0">{icon}</span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2 mb-0.5">
-          <span className="text-xs font-medium uppercase tracking-wide text-stone-400">{label}</span>
-          <button
-            type="button"
-            onClick={onEdit}
-            disabled={editDisabled}
-            className="p-0.5 rounded-full text-stone-300 hover:text-stone-500 hover:bg-stone-100 transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0 disabled:pointer-events-none disabled:opacity-0"
-            title="Edit placement notes"
-          >
-            <Pencil size={13} />
-          </button>
-        </div>
-        <span className={valueMuted ? "text-stone-500" : "text-stone-700"}>{value}</span>
-        {detail && (
-          <p className="text-xs text-stone-400 mt-1 leading-snug">{detail}</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function CareRow({ icon, label, value, highlight, detail }: {
-  icon: React.ReactNode; label: string; value: string; highlight?: boolean; detail?: string;
-}) {
-  return (
-    <div className={`flex gap-2 text-sm ${highlight ? "text-stone-800" : "text-stone-600"}`}>
-      <span className="mt-0.5 flex-shrink-0">{icon}</span>
-      <div>
-        <span className="text-xs font-medium uppercase tracking-wide text-stone-400 block mb-0.5">
-          {label}
-        </span>
-        <span>{value}</span>
-        {detail && (
-          <p className="text-xs text-stone-400 mt-1 leading-snug">{detail}</p>
-        )}
-      </div>
     </div>
   );
 }

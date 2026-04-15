@@ -22,7 +22,7 @@ Next.js **16** (App Router), TypeScript, Tailwind CSS, shadcn/ui, TanStack Query
 - `/screensaver` — ScreenSaverCarousel page
 
 ## Required Components
-`PlantUploadForm`, `PlantList`, `PlantListItemCard`, `ReminderIconRow`, `PlantHeroImage`, `PlantImageStrip`, `PlantStatusCard`, `PlantAnalysisResultCard`, `CareInstructionPanel`, `FunFactsPanel`, `PruningUploadForm`, `ScreenSaverCarousel`
+`PlantUploadForm`, `PlantList`, `PlantListItemCard`, `ReminderIconRow`, `PlantHeroImage`, `PlantImageStrip`, `PlantStatusCard`, `PlantAnalysisResultCard`, `CareTopicAccordion`, `CareInstructionPanel`, `FunFactsPanel`, `PruningUploadForm`, `ScreenSaverCarousel`
 
 ## Async UX Rules (critical)
 - Never leave the user with unexplained loading
