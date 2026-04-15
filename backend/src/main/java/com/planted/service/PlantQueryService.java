@@ -1,6 +1,10 @@
 package com.planted.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.planted.dto.HistoryDailyDigestDto;
 import com.planted.dto.PlantDetailResponse;
+import com.planted.dto.PlantHistoryEntryDto;
 import com.planted.dto.PlantListItemResponse;
 import com.planted.entity.*;
 import com.planted.mapper.PlantMapper;
@@ -12,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -29,6 +34,7 @@ public class PlantQueryService {
     private final PlantFertilizerEventRepository fertilizerEventRepository;
     private final PlantPruneEventRepository pruneEventRepository;
     private final PlantMapper plantMapper;
+    private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
     public List<PlantListItemResponse> listActivePlants() {
@@ -93,8 +99,13 @@ public class PlantQueryService {
                         PlantAnalysis.AnalysisStatus.PROCESSING))
                 .isEmpty();
 
-        List<PlantHistoryEntry> historyEntries = historyEntryRepository
+        List<PlantHistoryEntry> journalEntries = historyEntryRepository
                 .findByPlantIdOrderByCreatedAtDesc(plantId);
+        List<PlantWateringEvent> waterings = wateringEventRepository.findByPlantIdOrderByWateredAtDesc(plantId);
+        List<PlantFertilizerEvent> fertilizers = fertilizerEventRepository.findByPlantIdOrderByFertilizedAtDesc(plantId);
+        List<PlantPruneEvent> prunes = pruneEventRepository.findByPlantIdOrderByPrunedAtDesc(plantId);
+        List<PlantHistoryEntryDto> historyTimeline = plantMapper.mergeHistoryTimeline(
+                journalEntries, waterings, fertilizers, prunes);
 
         List<PlantAnalysis> summaryCandidates = analysisRepository.findLatestCompletedHistorySummaryWithBody(
                 plantId,
@@ -122,6 +133,8 @@ public class PlantQueryService {
 
         boolean historySummaryEligible = hasHistorySummarySourceData(plantId);
 
+        List<HistoryDailyDigestDto> historyDailyDigests = extractHistoryDailyDigests(latestHistorySummary);
+
         return plantMapper.toDetailResponse(
                 plant,
                 illustratedImage,
@@ -131,12 +144,31 @@ public class PlantQueryService {
                 latestAnalysis,
                 reminderState,
                 hasActiveJobs,
-                historyEntries,
+                historyTimeline,
                 historySummaryText,
+                historyDailyDigests,
                 historySummaryCompletedAt,
                 historySummaryError,
                 historySummaryEligible
         );
+    }
+
+    private List<HistoryDailyDigestDto> extractHistoryDailyDigests(PlantAnalysis latestHistorySummary) {
+        if (latestHistorySummary == null || latestHistorySummary.getRawModelResponseJsonb() == null) {
+            return List.of();
+        }
+        Object raw = latestHistorySummary.getRawModelResponseJsonb().get("dailyDigests");
+        if (raw == null) {
+            return List.of();
+        }
+        try {
+            List<HistoryDailyDigestDto> list = objectMapper.convertValue(
+                    raw, new TypeReference<List<HistoryDailyDigestDto>>() {});
+            return list != null ? Collections.unmodifiableList(list) : List.of();
+        } catch (IllegalArgumentException e) {
+            log.warn("Could not parse dailyDigests from history summary raw json: {}", e.getMessage());
+            return List.of();
+        }
     }
 
     private boolean hasHistorySummarySourceData(Long plantId) {

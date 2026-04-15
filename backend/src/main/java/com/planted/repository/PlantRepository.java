@@ -18,4 +18,8 @@ public interface PlantRepository extends JpaRepository<Plant, Long> {
 
     @Query("SELECT p FROM Plant p WHERE p.status = 'ACTIVE' ORDER BY p.createdAt DESC")
     List<Plant> findAllActive();
+
+    @Query("SELECT p.id FROM Plant p WHERE p.status = 'ACTIVE' AND p.growingContext = 'OUTDOOR' "
+            + "AND p.latitude IS NOT NULL AND p.longitude IS NOT NULL")
+    List<Long> findActiveOutdoorPlantIdsWithCoordinates();
 }

@@ -40,6 +40,17 @@ public class Plant {
     @Column(name = "geo_city")
     private String geoCity;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "growing_context", nullable = false)
+    @Builder.Default
+    private PlantGrowingContext growingContext = PlantGrowingContext.INDOOR;
+
+    @Column(name = "latitude")
+    private Double latitude;
+
+    @Column(name = "longitude")
+    private Double longitude;
+
     @Column(name = "goals_text", columnDefinition = "TEXT")
     private String goalsText;
 

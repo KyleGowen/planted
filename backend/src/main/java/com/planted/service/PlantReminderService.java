@@ -1,10 +1,13 @@
 package com.planted.service;
 
+import com.planted.config.PlantedWeatherProperties;
 import com.planted.dto.PlantImageDto;
 import com.planted.dto.PlantReminderResponse;
 import com.planted.entity.*;
 import com.planted.mapper.PlantMapper;
 import com.planted.repository.*;
+import com.planted.weather.WeatherService;
+import com.planted.weather.WeatherSnapshot;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -12,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -28,6 +32,8 @@ public class PlantReminderService {
     private final PlantFertilizerEventRepository fertilizerEventRepository;
     private final PlantPruneEventRepository pruneEventRepository;
     private final PlantMapper plantMapper;
+    private final WeatherService weatherService;
+    private final PlantedWeatherProperties weatherProperties;
 
     @Transactional(readOnly = true)
     public List<PlantReminderResponse> getWateringReminders() {
@@ -81,10 +87,12 @@ public class PlantReminderService {
     /**
      * Recompute reminder state from persisted care history and latest analysis.
      * Called by the PLANT_REMINDER_RECOMPUTE job processor.
-     * This avoids live LLM calls for list rendering — uses species data + event history.
+     * Outdoor plants with coordinates may enrich copy from Open-Meteo (no blocking on HTTP request threads).
      */
     @Transactional
     public void recomputeReminderState(Long plantId) {
+        Plant plant = plantRepository.findById(plantId).orElse(null);
+
         PlantAnalysis analysis = analysisRepository
                 .findFirstByPlantIdAndAnalysisTypeOrderByCreatedAtDesc(
                         plantId, PlantAnalysis.AnalysisType.REGISTRATION)
@@ -107,6 +115,7 @@ public class PlantReminderService {
         String nextWateringInstruction = null;
         String nextFertilizerInstruction = null;
         String nextPruningInstruction = null;
+        String weatherCareNote = null;
 
         if (analysis != null) {
             // Watering due check
@@ -180,6 +189,34 @@ public class PlantReminderService {
             }
         }
 
+        if (plant != null
+                && plant.getGrowingContext() == PlantGrowingContext.OUTDOOR
+                && plant.getLatitude() != null
+                && plant.getLongitude() != null) {
+            Optional<WeatherSnapshot> wx = weatherService.fetchSnapshot(
+                    plant.getLatitude(), plant.getLongitude());
+            if (wx.isPresent()) {
+                WeatherSnapshot s = wx.get();
+                boolean softenedWateringDue = false;
+                if (s.pastWeekPrecipitationMm() >= weatherProperties.getRecentRainWeekThresholdMm()
+                        && wateringDue
+                        && !wateringOverdue) {
+                    wateringDue = false;
+                    wateringOverdue = false;
+                    softenedWateringDue = true;
+                    nextWateringInstruction =
+                            "Your schedule suggests watering, but recent rain may mean the soil is still moist—"
+                                    + "check soil before watering.";
+                }
+                weatherCareNote = buildWeatherCareNote(s);
+                nextWateringInstruction = softenedWateringDue
+                        ? nextWateringInstruction
+                        : appendWateringWeather(nextWateringInstruction, s);
+                nextFertilizerInstruction = appendFertilizerWeather(nextFertilizerInstruction, s, fertilizerDue);
+                nextPruningInstruction = appendPruningWeather(nextPruningInstruction, s);
+            }
+        }
+
         // Upsert reminder state
         PlantReminderState state = reminderStateRepository.findByPlantId(plantId)
                 .orElse(PlantReminderState.builder().plantId(plantId).build());
@@ -191,9 +228,62 @@ public class PlantReminderService {
         state.setNextWateringInstruction(nextWateringInstruction);
         state.setNextFertilizerInstruction(nextFertilizerInstruction);
         state.setNextPruningInstruction(nextPruningInstruction);
+        state.setWeatherCareNote(weatherCareNote);
 
         reminderStateRepository.save(state);
         log.info("Reminder state recomputed for plant {}", plantId);
+    }
+
+    private String buildWeatherCareNote(WeatherSnapshot s) {
+        List<String> parts = new ArrayList<>();
+        if (s.pastWeekPrecipitationMm() >= weatherProperties.getRecentRainWeekThresholdMm()) {
+            parts.add(String.format(
+                    "About %.0f mm rain in the past week—check soil moisture before watering outdoor plants.",
+                    s.pastWeekPrecipitationMm()));
+        }
+        if (s.forecastPrecipNextTwoDaysMm() >= weatherProperties.getForecastRainThresholdMm()) {
+            parts.add("Rain is expected soon; outdoor containers may need less water.");
+        }
+        if (s.likelyHeatStress()) {
+            parts.add("Recent heat can stress plants—provide shade if possible and avoid heavy pruning or fertilizer until it cools.");
+        }
+        if (parts.isEmpty()) {
+            return null;
+        }
+        return String.join(" ", parts);
+    }
+
+    private String appendWateringWeather(String base, WeatherSnapshot s) {
+        if (base == null || base.isBlank()) {
+            return base;
+        }
+        if (s.pastWeekPrecipitationMm() >= weatherProperties.getRecentRainWeekThresholdMm()) {
+            return base + " Recent rain may mean you can wait if the soil is still moist.";
+        }
+        if (s.forecastPrecipNextTwoDaysMm() >= weatherProperties.getForecastRainThresholdMm()) {
+            return base + " Rain is forecast—recheck before watering.";
+        }
+        return base;
+    }
+
+    private String appendFertilizerWeather(String base, WeatherSnapshot s, boolean fertilizerDue) {
+        if (base == null || base.isBlank() || !fertilizerDue) {
+            return base;
+        }
+        if (s.likelyHeatStress()) {
+            return base + " Consider delaying fertilizer until heat eases.";
+        }
+        return base;
+    }
+
+    private String appendPruningWeather(String base, WeatherSnapshot s) {
+        if (base == null || base.isBlank()) {
+            return base;
+        }
+        if (s.likelyHeatStress()) {
+            return base + " Avoid heavy pruning during heat stress.";
+        }
+        return base;
     }
 
     private static String firstNonBlank(String a, String b, String c) {

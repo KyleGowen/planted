@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { registerPlant } from "@/lib/api";
+import type { PlantGrowingContext } from "@/types/plant";
 
 export default function UploadPage() {
   const router = useRouter();
@@ -25,6 +26,9 @@ export default function UploadPage() {
   const [geoCity, setGeoCity] = useState("");
   const [geoState, setGeoState] = useState("");
   const [geoCountry, setGeoCountry] = useState("");
+  const [growingContext, setGrowingContext] = useState<PlantGrowingContext>("INDOOR");
+  const [latitude, setLatitude] = useState("");
+  const [longitude, setLongitude] = useState("");
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -40,6 +44,11 @@ export default function UploadPage() {
       if (geoCountry) formData.append("geoCountry", geoCountry);
       if (geoState) formData.append("geoState", geoState);
       if (geoCity) formData.append("geoCity", geoCity);
+      formData.append("growingContext", growingContext);
+      if (growingContext === "OUTDOOR") {
+        if (latitude.trim()) formData.append("latitude", latitude.trim());
+        if (longitude.trim()) formData.append("longitude", longitude.trim());
+      }
       return registerPlant(formData);
     },
     onSuccess: (data) => {
@@ -165,6 +174,57 @@ export default function UploadPage() {
                 placeholder="Country"
               />
             </div>
+          </div>
+
+          <div>
+            <Label htmlFor="growingContext" className="text-stone-600">
+              Growing environment
+            </Label>
+            <p className="text-xs text-stone-400 mt-0.5 mb-2">
+              Outdoor plants can use local weather (rain, heat) in care reminders when you add coordinates below.
+              Approximate latitude/longitude are stored only for weather lookups.
+            </p>
+            <select
+              id="growingContext"
+              value={growingContext}
+              onChange={(e) => setGrowingContext(e.target.value as PlantGrowingContext)}
+              className="mt-1.5 w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-1 focus:ring-stone-400"
+            >
+              <option value="INDOOR">Indoor</option>
+              <option value="OUTDOOR">Outdoor</option>
+            </select>
+            {growingContext === "OUTDOOR" && (
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <div>
+                  <Label htmlFor="latitude" className="text-xs text-stone-500">
+                    Latitude (optional)
+                  </Label>
+                  <Input
+                    id="latitude"
+                    type="text"
+                    inputMode="decimal"
+                    value={latitude}
+                    onChange={(e) => setLatitude(e.target.value)}
+                    placeholder="e.g. 40.7128"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="longitude" className="text-xs text-stone-500">
+                    Longitude (optional)
+                  </Label>
+                  <Input
+                    id="longitude"
+                    type="text"
+                    inputMode="decimal"
+                    value={longitude}
+                    onChange={(e) => setLongitude(e.target.value)}
+                    placeholder="e.g. -74.0060"
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <div>

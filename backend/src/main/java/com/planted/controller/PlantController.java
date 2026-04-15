@@ -1,6 +1,7 @@
 package com.planted.controller;
 
 import com.planted.dto.*;
+import com.planted.entity.PlantGrowingContext;
 import com.planted.service.PlantCommandService;
 import com.planted.service.PlantQueryService;
 import jakarta.validation.Valid;
@@ -32,12 +33,38 @@ public class PlantController {
             @RequestPart(value = "lastWateredAt", required = false) String lastWateredAt,
             @RequestPart(value = "geoCountry", required = false) String geoCountry,
             @RequestPart(value = "geoState", required = false) String geoState,
-            @RequestPart(value = "geoCity", required = false) String geoCity) {
+            @RequestPart(value = "geoCity", required = false) String geoCity,
+            @RequestPart(value = "growingContext", required = false) String growingContext,
+            @RequestPart(value = "latitude", required = false) String latitude,
+            @RequestPart(value = "longitude", required = false) String longitude) {
 
         OffsetDateTime lastWatered = lastWateredAt != null ? OffsetDateTime.parse(lastWateredAt) : null;
         CreatePlantResponse response = commandService.registerPlant(
-                image, name, location, goalsText, lastWatered, geoCountry, geoState, geoCity);
+                image, name, location, goalsText, lastWatered, geoCountry, geoState, geoCity,
+                parseGrowingContext(growingContext), parseCoordinate(latitude), parseCoordinate(longitude));
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
+    }
+
+    private static PlantGrowingContext parseGrowingContext(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return PlantGrowingContext.INDOOR;
+        }
+        try {
+            return PlantGrowingContext.valueOf(raw.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return PlantGrowingContext.INDOOR;
+        }
+    }
+
+    private static Double parseCoordinate(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return Double.parseDouble(raw.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     @GetMapping
@@ -85,12 +112,28 @@ public class PlantController {
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 
+    @PatchMapping("/{id}/growing")
+    public ResponseEntity<Void> updatePlantGrowing(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdatePlantGrowingRequest request) {
+        commandService.updatePlantGrowing(id, request);
+        return ResponseEntity.noContent().build();
+    }
+
     @PatchMapping("/{id}/name")
     public ResponseEntity<Void> updatePlantName(
             @PathVariable Long id,
             @RequestBody UpdatePlantNameRequest request) {
         commandService.updatePlantName(id, request.name());
         return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}/placement")
+    public ResponseEntity<RequestReanalysisResponse> updatePlantPlacement(
+            @PathVariable Long id,
+            @RequestBody UpdatePlantPlacementRequest request) {
+        RequestReanalysisResponse response = commandService.updatePlantPlacement(id, request.location());
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 
     /** Declared before <code>/{id}/history</code> so <code>/history/summary</code> is never ambiguous. */

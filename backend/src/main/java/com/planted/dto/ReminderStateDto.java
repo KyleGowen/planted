@@ -12,5 +12,6 @@ public record ReminderStateDto(
         String nextWateringInstruction,
         String nextFertilizerInstruction,
         String nextPruningInstruction,
+        String weatherCareNote,
         OffsetDateTime lastComputedAt
 ) {}

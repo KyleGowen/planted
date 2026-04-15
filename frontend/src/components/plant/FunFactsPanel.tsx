@@ -1,6 +1,6 @@
 "use client";
 
-import { Globe, BookOpen, ScrollText, Utensils } from "lucide-react";
+import { Globe, ScrollText, Utensils } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SpeciesOverviewProse } from "@/components/plant/SpeciesOverviewProse";
 import type { AnalysisSummaryDto } from "@/types/plant";
@@ -64,14 +64,6 @@ export function FunFactsPanel({ analysis }: Props) {
               ))}
             </ul>
           </div>
-        )}
-
-        {analysis.propagationInstructions && (
-          <FactRow
-            icon={<BookOpen size={15} className="text-stone-400" />}
-            label="Propagation"
-            value={analysis.propagationInstructions}
-          />
         )}
       </CardContent>
     </Card>

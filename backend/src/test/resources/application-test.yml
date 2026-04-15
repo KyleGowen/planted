@@ -7,3 +7,7 @@ spring:
 planted:
   openai:
     api-key: test-dummy-key
+  weather:
+    enabled: false
+  outdoor-reminder-refresh:
+    enabled: false

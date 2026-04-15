@@ -48,6 +48,10 @@ public class PlantReminderState {
     @Column(name = "next_pruning_instruction", columnDefinition = "TEXT")
     private String nextPruningInstruction;
 
+    /** Short outdoor conditions summary from weather API (rain, heat); null for indoor or when unavailable. */
+    @Column(name = "weather_care_note", columnDefinition = "TEXT")
+    private String weatherCareNote;
+
     @Column(name = "last_computed_at", nullable = false)
     private OffsetDateTime lastComputedAt;
 

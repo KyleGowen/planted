@@ -1,6 +1,8 @@
 // TypeScript interfaces mirroring backend DTOs exactly
 
 export type PlantStatus = "ACTIVE" | "ARCHIVED";
+/** Where the plant primarily grows; OUTDOOR enables weather-informed reminder copy when lat/lon are set. */
+export type PlantGrowingContext = "INDOOR" | "OUTDOOR";
 export type AnalysisStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
 export type AnalysisType = "REGISTRATION" | "REANALYSIS" | "PRUNING" | "REMINDER" | "INFO_PANEL";
 export type ImageType = "ORIGINAL_UPLOAD" | "HEALTHY_REFERENCE" | "ILLUSTRATED" | "PRUNE_UPDATE";
@@ -24,6 +26,8 @@ export interface ReminderStateDto {
   nextWateringInstruction: string | null;
   nextFertilizerInstruction: string | null;
   nextPruningInstruction: string | null;
+  /** Short outdoor weather context line from the reminder job (null for indoor or when weather is unavailable). */
+  weatherCareNote: string | null;
   lastComputedAt: string;
 }
 
@@ -76,9 +80,17 @@ export interface PlantListItemResponse {
 
 export interface PlantHistoryEntryDto {
   id: number;
+  /** JOURNAL | WATERING | FERTILIZER | PRUNE — stable keys with id across tables */
+  entryKind?: string;
   noteText: string | null;
   image: PlantImageDto | null;
   createdAt: string;
+}
+
+/** Per-local-day narrative from the latest history summary job (newest day first). */
+export interface HistoryDailyDigestDto {
+  day: string;
+  digest: string;
 }
 
 export interface PlantDetailResponse {
@@ -93,6 +105,10 @@ export interface PlantDetailResponse {
   geoCountry: string | null;
   geoState: string | null;
   geoCity: string | null;
+  /** Omitted by older APIs; treated as INDOOR when missing. */
+  growingContext?: PlantGrowingContext;
+  latitude?: number | null;
+  longitude?: number | null;
   status: PlantStatus;
   illustratedImage: PlantImageDto | null;
   originalImages: PlantImageDto[];
@@ -103,6 +119,8 @@ export interface PlantDetailResponse {
   hasActiveJobs: boolean;
   historyEntries: PlantHistoryEntryDto[];
   historySummaryText: string | null;
+  /** Present after a successful digest-style summary; when non-empty, History uses these instead of mingling raw entries with parsed summary text. */
+  historyDailyDigests?: HistoryDailyDigestDto[];
   historySummaryCompletedAt: string | null;
   /** Present when the latest history-summary job failed (or omitted by older APIs). */
   historySummaryError?: string | null;

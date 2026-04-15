@@ -216,8 +216,12 @@ public class OpenAiPlantClient {
             JsonNode root = objectMapper.readTree(responseText);
             String outputText = extractOutputText(root);
             PlantHistorySummarySchema parsed = objectMapper.readValue(outputText, PlantHistorySummarySchema.class);
-            if (parsed.getSummary() == null || parsed.getSummary().isBlank()) {
-                throw new IllegalStateException("Model returned an empty summary.");
+            if (parsed.getDailyDigests() == null || parsed.getDailyDigests().isEmpty()) {
+                throw new IllegalStateException("Model returned no daily_digests.");
+            }
+            String flat = parsed.flattenForStorage();
+            if (flat.isBlank()) {
+                throw new IllegalStateException("Model returned empty digest text.");
             }
             return parsed;
         } catch (Exception e) {
@@ -498,13 +502,29 @@ public class OpenAiPlantClient {
     }
 
     private Map<String, Object> historySummarySchema() {
+        Map<String, Object> itemProps = new LinkedHashMap<>();
+        itemProps.put("day", Map.of(
+                "type", "string",
+                "description", "Local calendar day in ISO format YYYY-MM-DD."));
+        itemProps.put("digest", Map.of(
+                "type", "string",
+                "description", "Short narrative for that day; include accurate care counts when provided in the log."));
+        Map<String, Object> itemSchema = new LinkedHashMap<>();
+        itemSchema.put("type", "object");
+        itemSchema.put("properties", itemProps);
+        itemSchema.put("required", List.of("day", "digest"));
+        itemSchema.put("additionalProperties", false);
+
         Map<String, Object> properties = new LinkedHashMap<>();
-        properties.put("summary", Map.of("type", "string"));
+        properties.put("daily_digests", Map.of(
+                "type", "array",
+                "description", "One entry per calendar day with activity, newest day first.",
+                "items", itemSchema));
 
         Map<String, Object> schema = new LinkedHashMap<>();
         schema.put("type", "object");
         schema.put("properties", properties);
-        schema.put("required", List.of("summary"));
+        schema.put("required", List.of("daily_digests"));
         schema.put("additionalProperties", false);
         return schema;
     }

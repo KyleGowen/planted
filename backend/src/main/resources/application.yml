@@ -35,6 +35,22 @@ planted:
   user:
     # Until auth keys plants by real user id, workers and settings use this tenant id.
     default-id: default
+  history:
+    # IANA timezone for calendar-day grouping when the plant has no latitude/longitude (or tz lookup fails).
+    day-boundary-zone: UTC
+  weather:
+    enabled: true
+    open-meteo-forecast-url: https://api.open-meteo.com/v1/forecast
+    cache-ttl-minutes: 15
+    past-days: 7
+    forecast-days: 3
+    recent-rain-week-threshold-mm: 12
+    forecast-rain-threshold-mm: 3
+    heat-absolute-threshold-c: 32
+    heat-spike-delta-c: 6
+  outdoor-reminder-refresh:
+    enabled: true
+    cron: "0 0 */8 * * *"
   cors:
     allowed-origin-patterns:
       - "http://localhost:3000"

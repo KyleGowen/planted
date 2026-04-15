@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -43,6 +44,7 @@ public class PlantMapper {
                 state.getNextWateringInstruction(),
                 state.getNextFertilizerInstruction(),
                 state.getNextPruningInstruction(),
+                state.getWeatherCareNote(),
                 state.getLastComputedAt()
         );
     }
@@ -90,7 +92,64 @@ public class PlantMapper {
                     .map(this::toImageDto)
                     .orElse(null);
         }
-        return new PlantHistoryEntryDto(entry.getId(), entry.getNoteText(), imageDto, entry.getCreatedAt());
+        return new PlantHistoryEntryDto(
+                entry.getId(), "JOURNAL", entry.getNoteText(), imageDto, entry.getCreatedAt());
+    }
+
+    public PlantHistoryEntryDto toHistoryEntryDto(PlantWateringEvent event) {
+        if (event == null) return null;
+        String note = event.getNotes() != null && !event.getNotes().isBlank()
+                ? "Watered — " + event.getNotes().trim()
+                : "Watered";
+        return new PlantHistoryEntryDto(event.getId(), "WATERING", note, null, event.getWateredAt());
+    }
+
+    public PlantHistoryEntryDto toHistoryEntryDto(PlantFertilizerEvent event) {
+        if (event == null) return null;
+        StringBuilder line = new StringBuilder("Fertilized");
+        if (event.getFertilizerType() != null && !event.getFertilizerType().isBlank()) {
+            line.append(" (").append(event.getFertilizerType().trim()).append(")");
+        }
+        if (event.getNotes() != null && !event.getNotes().isBlank()) {
+            line.append(" — ").append(event.getNotes().trim());
+        }
+        return new PlantHistoryEntryDto(event.getId(), "FERTILIZER", line.toString(), null, event.getFertilizedAt());
+    }
+
+    public PlantHistoryEntryDto toHistoryEntryDto(PlantPruneEvent event) {
+        if (event == null) return null;
+        String note = event.getNotes() != null && !event.getNotes().isBlank()
+                ? "Pruned — " + event.getNotes().trim()
+                : "Pruned";
+        PlantImageDto imageDto = null;
+        if (event.getImageId() != null) {
+            imageDto = plantImageRepository.findById(event.getImageId())
+                    .map(this::toImageDto)
+                    .orElse(null);
+        }
+        return new PlantHistoryEntryDto(event.getId(), "PRUNE", note, imageDto, event.getPrunedAt());
+    }
+
+    public List<PlantHistoryEntryDto> mergeHistoryTimeline(
+            List<PlantHistoryEntry> journalEntries,
+            List<PlantWateringEvent> waterings,
+            List<PlantFertilizerEvent> fertilizers,
+            List<PlantPruneEvent> prunes) {
+        List<PlantHistoryEntryDto> merged = new ArrayList<>();
+        if (journalEntries != null) {
+            journalEntries.stream().map(this::toHistoryEntryDto).forEach(merged::add);
+        }
+        if (waterings != null) {
+            waterings.stream().map(this::toHistoryEntryDto).forEach(merged::add);
+        }
+        if (fertilizers != null) {
+            fertilizers.stream().map(this::toHistoryEntryDto).forEach(merged::add);
+        }
+        if (prunes != null) {
+            prunes.stream().map(this::toHistoryEntryDto).forEach(merged::add);
+        }
+        merged.sort(Comparator.comparing(PlantHistoryEntryDto::createdAt).reversed());
+        return merged;
     }
 
     public PlantListItemResponse toListItemResponse(
@@ -129,8 +188,9 @@ public class PlantMapper {
             PlantAnalysis latestAnalysis,
             PlantReminderState reminderState,
             boolean hasActiveJobs,
-            List<PlantHistoryEntry> historyEntries,
+            List<PlantHistoryEntryDto> historyEntries,
             String historySummaryText,
+            List<HistoryDailyDigestDto> historyDailyDigests,
             OffsetDateTime historySummaryCompletedAt,
             String historySummaryError,
             boolean historySummaryEligible) {
@@ -147,6 +207,9 @@ public class PlantMapper {
                 plant.getGeoCountry(),
                 plant.getGeoState(),
                 plant.getGeoCity(),
+                plant.getGrowingContext() != null ? plant.getGrowingContext().name() : "INDOOR",
+                plant.getLatitude(),
+                plant.getLongitude(),
                 plant.getStatus().name(),
                 toImageDto(illustratedImage),
                 originalImages.stream().map(this::toImageDto).toList(),
@@ -155,8 +218,9 @@ public class PlantMapper {
                 toAnalysisSummaryDto(latestAnalysis),
                 toReminderStateDto(reminderState),
                 hasActiveJobs,
-                historyEntries.stream().map(this::toHistoryEntryDto).toList(),
+                historyEntries,
                 historySummaryText,
+                historyDailyDigests,
                 historySummaryCompletedAt,
                 historySummaryError,
                 historySummaryEligible,

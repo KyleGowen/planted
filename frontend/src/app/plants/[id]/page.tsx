@@ -1,17 +1,22 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, Droplets, Leaf, Scissors, Archive,
-  ChevronLeft, ChevronRight, Globe, ScrollText, Sun, MapPin, BookOpen, Utensils, Pencil, Check, X, RefreshCw,
+  ChevronLeft, ChevronRight, Globe, ScrollText, Sun, MapPin, Utensils, Pencil, Check, X, RefreshCw,
   Camera, Send, Clock,
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { ButtonLink } from "@/components/ui/button-link";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PlantStatusCard } from "@/components/plant/PlantStatusCard";
 import { ReminderIconRow } from "@/components/plant/ReminderIconRow";
@@ -20,14 +25,27 @@ import {
   archivePlant,
   recordWatering,
   recordFertilizer,
+  recordPrune,
   updatePlantName,
+  updatePlantGrowing,
+  updatePlantPlacement,
   requestReanalysis,
   addHistoryNote,
   addHistoryImage,
   requestHistorySummary,
 } from "@/lib/api";
-import type { PlantDetailResponse, PlantHistoryEntryDto, PlantImageDto } from "@/types/plant";
+import type {
+  PlantDetailResponse,
+  PlantGrowingContext,
+  PlantHistoryEntryDto,
+  PlantImageDto,
+} from "@/types/plant";
 import { SpeciesOverviewProse } from "@/components/plant/SpeciesOverviewProse";
+import {
+  buildHistoryDayTiles,
+  formatDayTileTitle,
+  type TimelineRow,
+} from "@/lib/historyDayTimeline";
 
 export default function PlantDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -38,6 +56,10 @@ export default function PlantDetailPage() {
   const [historyIndex, setHistoryIndex] = useState(0);
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState("");
+  const [editingGrowing, setEditingGrowing] = useState(false);
+  const [growingCtx, setGrowingCtx] = useState<PlantGrowingContext>("INDOOR");
+  const [latInput, setLatInput] = useState("");
+  const [lonInput, setLonInput] = useState("");
 
   const { data: plant, isLoading } = useQuery({
     queryKey: ["plant", plantId],
@@ -71,10 +93,28 @@ export default function PlantDetailPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["plant", plantId] }),
   });
 
+  const pruneMutation = useMutation({
+    mutationFn: () => recordPrune(plantId, new Date().toISOString()),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["plant", plantId] }),
+  });
+
   const nameMutation = useMutation({
     mutationFn: (name: string | null) => updatePlantName(plantId, name),
     onSuccess: () => {
       setEditingName(false);
+      queryClient.invalidateQueries({ queryKey: ["plant", plantId] });
+      queryClient.invalidateQueries({ queryKey: ["plants"] });
+    },
+  });
+
+  const growingMutation = useMutation({
+    mutationFn: (body: {
+      growingContext: PlantGrowingContext;
+      latitude: number | null;
+      longitude: number | null;
+    }) => updatePlantGrowing(plantId, body),
+    onSuccess: () => {
+      setEditingGrowing(false);
       queryClient.invalidateQueries({ queryKey: ["plant", plantId] });
       queryClient.invalidateQueries({ queryKey: ["plants"] });
     },
@@ -85,15 +125,26 @@ export default function PlantDetailPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["plant", plantId] }),
   });
 
+  const placementMutation = useMutation({
+    mutationFn: (location: string | null) => updatePlantPlacement(plantId, location),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["plant", plantId] }),
+  });
+
   const addNoteMutation = useMutation({
     mutationFn: (noteText: string) => addHistoryNote(plantId, noteText),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["plant", plantId] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["plant", plantId] });
+      addNoteMutation.reset();
+    },
   });
 
   const addImageMutation = useMutation({
     mutationFn: ({ image, noteText }: { image: File; noteText?: string }) =>
       addHistoryImage(plantId, image, noteText),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["plant", plantId] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["plant", plantId] });
+      addImageMutation.reset();
+    },
   });
 
   const historySummaryMutation = useMutation({
@@ -132,6 +183,37 @@ export default function PlantDetailPage() {
     setEditingName(false);
   }
 
+  function startEditGrowing() {
+    setGrowingCtx(plant?.growingContext ?? "INDOOR");
+    setLatInput(plant?.latitude != null ? String(plant.latitude) : "");
+    setLonInput(plant?.longitude != null ? String(plant.longitude) : "");
+    setEditingGrowing(true);
+  }
+
+  function saveGrowing() {
+    const latTrim = latInput.trim();
+    const lonTrim = lonInput.trim();
+    const lat = latTrim === "" ? null : Number.parseFloat(latTrim);
+    const lon = lonTrim === "" ? null : Number.parseFloat(lonTrim);
+    if (latTrim !== "" && !Number.isFinite(lat)) {
+      window.alert("Latitude must be a number.");
+      return;
+    }
+    if (lonTrim !== "" && !Number.isFinite(lon)) {
+      window.alert("Longitude must be a number.");
+      return;
+    }
+    growingMutation.mutate({
+      growingContext: growingCtx,
+      latitude: latTrim === "" ? null : lat,
+      longitude: lonTrim === "" ? null : lon,
+    });
+  }
+
+  function cancelEditGrowing() {
+    setEditingGrowing(false);
+  }
+
   if (isLoading) return <LoadingSkeleton />;
   if (!plant) return null;
 
@@ -162,7 +244,7 @@ export default function PlantDetailPage() {
       {/* ── Two-column landscape layout ───────────────────────── */}
       <div className="flex flex-1 gap-4 min-h-0 pt-5">
 
-        {/* ── Left column: hero + thumbs + history notes ────────── */}
+        {/* ── Left column: hero + thumbs ─────────────────────────── */}
         <div className="flex flex-col gap-2 w-[34%] min-h-0">
 
           {/* Hero image — dominates the left column height */}
@@ -250,18 +332,6 @@ export default function PlantDetailPage() {
               </div>
             </div>
           </div>
-
-          {/* History observations — natural height, pinned to bottom of left column */}
-          <div className="mt-auto flex-shrink-0">
-            <HistorySection
-              entries={plant.historyEntries ?? []}
-              heroImageUrl={mainImage?.url ?? null}
-              onAddNote={(text) => addNoteMutation.mutate(text)}
-              onAddImage={(image, noteText) => addImageMutation.mutate({ image, noteText })}
-              addNotePending={addNoteMutation.isPending}
-              addImagePending={addImageMutation.isPending}
-            />
-          </div>
         </div>
 
         {/* ── Right column: header + status + panels ────────────── */}
@@ -320,21 +390,114 @@ export default function PlantDetailPage() {
               )}
             </div>
 
-            {/* Right: placement description */}
-            {(plant.location || plant.geoCity || plant.geoState || plant.geoCountry) && (
-              <div className="flex flex-col items-end gap-0.5 flex-shrink-0 text-right">
-                {plant.location && (
-                  <p className="text-sm text-stone-400">{plant.location}</p>
-                )}
-                {(plant.geoCity || plant.geoState || plant.geoCountry) && (
-                  <p className="text-sm text-stone-400 flex items-center gap-1">
+            {/* Right: placement + compact growing / weather */}
+            <div className="flex flex-col items-end gap-1.5 flex-shrink-0 text-right max-w-[min(22rem,46vw)]">
+              {(plant.geoCity || plant.geoState || plant.geoCountry) && (
+                <div className="flex flex-col items-end gap-0.5">
+                  <p className="text-sm text-stone-400 flex items-center justify-end gap-1">
                     <MapPin size={11} className="flex-shrink-0" />
                     {[plant.geoCity, plant.geoState, plant.geoCountry].filter(Boolean).join(", ")}
                   </p>
-                )}
+                </div>
+              )}
+              <div className="flex flex-col items-end gap-0.5">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-stone-400">
+                  Growing &amp; local weather
+                </p>
+                <div className="flex items-baseline justify-end gap-2 flex-wrap">
+                  <p className="text-xs text-stone-500 leading-snug">
+                    {(plant.growingContext ?? "INDOOR") === "OUTDOOR" ? "Outdoor" : "Indoor"}
+                    {plant.latitude != null && plant.longitude != null
+                      ? " · Coords on file"
+                      : (plant.growingContext ?? "INDOOR") === "OUTDOOR"
+                        ? " · Add coords for weather reminders"
+                        : ""}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={startEditGrowing}
+                    className="text-xs font-medium text-stone-500 hover:text-stone-800 flex-shrink-0"
+                  >
+                    Edit
+                  </button>
+                </div>
               </div>
-            )}
+            </div>
           </div>
+
+          <Dialog
+            open={editingGrowing}
+            onOpenChange={(open) => {
+              if (!open) cancelEditGrowing();
+            }}
+          >
+            <DialogContent className="sm:max-w-md" showCloseButton>
+              <DialogHeader>
+                <DialogTitle>Growing &amp; local weather</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <label className="block text-xs text-stone-500">
+                  Environment
+                  <select
+                    value={growingCtx}
+                    onChange={(e) => setGrowingCtx(e.target.value as PlantGrowingContext)}
+                    className="mt-1 w-full rounded-md border border-stone-200 bg-white px-2 py-1.5 text-sm text-stone-800"
+                  >
+                    <option value="INDOOR">Indoor</option>
+                    <option value="OUTDOOR">Outdoor</option>
+                  </select>
+                </label>
+                {growingCtx === "OUTDOOR" && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="text-xs text-stone-500">
+                      Latitude
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={latInput}
+                        onChange={(e) => setLatInput(e.target.value)}
+                        className="mt-0.5 w-full rounded-md border border-stone-200 bg-white px-2 py-1 text-sm"
+                        placeholder="e.g. 40.7"
+                      />
+                    </label>
+                    <label className="text-xs text-stone-500">
+                      Longitude
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={lonInput}
+                        onChange={(e) => setLonInput(e.target.value)}
+                        className="mt-0.5 w-full rounded-md border border-stone-200 bg-white px-2 py-1 text-sm"
+                        placeholder="e.g. -74.0"
+                      />
+                    </label>
+                  </div>
+                )}
+                <p className="text-[11px] text-stone-400 leading-snug">
+                  Coordinates are stored to query public weather only (Open-Meteo). Use approximate values if you prefer.
+                </p>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={cancelEditGrowing}
+                  disabled={growingMutation.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={saveGrowing}
+                  disabled={growingMutation.isPending}
+                >
+                  Save
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           {/* Job status */}
           <PlantStatusCard status={analysis?.status ?? null} />
@@ -343,6 +506,9 @@ export default function PlantDetailPage() {
           <div className="grid grid-cols-[3fr_2fr] gap-3 flex-1 min-h-0">
             <SpeciesPanel
               analysis={analysis}
+              historyEntries={plant.historyEntries ?? []}
+              heroImageUrl={mainImage?.url ?? null}
+              historyDailyDigests={plant.historyDailyDigests ?? []}
               historySummaryText={plant.historySummaryText}
               historySummaryCompletedAt={plant.historySummaryCompletedAt}
               historySummaryError={plant.historySummaryError ?? null}
@@ -359,11 +525,24 @@ export default function PlantDetailPage() {
             <CarePanel
               analysis={analysis}
               reminderState={plant.reminderState}
+              placementSeed={plant.location ?? null}
+              savePlacement={(loc) => placementMutation.mutateAsync(loc)}
+              placementSavePending={placementMutation.isPending}
+              placementSaveError={
+                placementMutation.error instanceof Error ? placementMutation.error.message : null
+              }
+              onPlacementDialogOpen={() => placementMutation.reset()}
               onWater={() => waterMutation.mutate()}
               onFertilize={() => fertMutation.mutate()}
+              onPrune={() => pruneMutation.mutate()}
               waterPending={waterMutation.isPending}
               fertPending={fertMutation.isPending}
-              plantId={plantId}
+              prunePending={pruneMutation.isPending}
+              careActionError={
+                [waterMutation.error, fertMutation.error, pruneMutation.error].find(
+                  (e): e is Error => e instanceof Error
+                )?.message ?? null
+              }
               onArchive={() => {
                 if (confirm("Archive this plant? You can restore it later.")) {
                   archiveMutation.mutate();
@@ -372,6 +551,16 @@ export default function PlantDetailPage() {
               archivePending={archiveMutation.isPending}
               onRefresh={() => reanalysisMutation.mutate()}
               refreshPending={reanalysisMutation.isPending}
+              onAddNote={(text) => addNoteMutation.mutate(text)}
+              onAddImage={(image, noteText) => addImageMutation.mutate({ image, noteText })}
+              addNotePending={addNoteMutation.isPending}
+              addImagePending={addImageMutation.isPending}
+              journalNoteError={
+                addNoteMutation.error instanceof Error ? addNoteMutation.error.message : null
+              }
+              journalImageError={
+                addImageMutation.error instanceof Error ? addImageMutation.error.message : null
+              }
             />
           </div>
         </div>
@@ -429,6 +618,9 @@ function ReferenceThumb({ img }: { img: PlantImageDto }) {
 
 function SpeciesPanel({
   analysis,
+  historyEntries,
+  heroImageUrl,
+  historyDailyDigests,
   historySummaryText,
   historySummaryCompletedAt,
   historySummaryError,
@@ -439,6 +631,9 @@ function SpeciesPanel({
   summaryMutationError,
 }: {
   analysis: PlantDetailResponse["latestAnalysis"];
+  historyEntries: PlantHistoryEntryDto[];
+  heroImageUrl: string | null;
+  historyDailyDigests: PlantDetailResponse["historyDailyDigests"];
   historySummaryText: string | null;
   historySummaryCompletedAt: string | null;
   historySummaryError: string | null;
@@ -449,77 +644,84 @@ function SpeciesPanel({
   summaryMutationError: string | null;
 }) {
   const speciesReady = analysis?.status === "COMPLETED";
-  const hasSummaryText = Boolean(historySummaryText?.trim());
+  const digestTiles = historyDailyDigests ?? [];
+  const hasDigestTiles = digestTiles.length > 0;
+  const hasSummaryText =
+    Boolean(historySummaryText?.trim()) || hasDigestTiles;
   const displayError = historySummaryError ?? summaryMutationError;
 
+  const historyDayTiles = useMemo(
+    () =>
+      buildHistoryDayTiles(
+        historyEntries,
+        historySummaryText,
+        historySummaryCompletedAt
+      ),
+    [historyEntries, historySummaryText, historySummaryCompletedAt]
+  );
+
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-3 h-full overflow-y-auto space-y-3">
-      <p className="text-xs font-medium uppercase tracking-wide text-stone-400">About This Plant</p>
+    <div className="rounded-2xl border border-stone-200 bg-white p-3 h-full flex flex-col gap-3 min-h-0 overflow-hidden">
+      <div className="flex-[0_1_auto] min-h-0 overflow-y-auto space-y-3">
+        <p className="text-xs font-medium uppercase tracking-wide text-stone-400">About This Plant</p>
 
-      {!speciesReady ? (
-        <p className="text-sm text-stone-400 italic">Species profile is being prepared…</p>
-      ) : (
-        <>
-          {(analysis.scientificName || analysis.className) && (
-            <div className="text-sm text-stone-600">
-              {analysis.scientificName && (
-                <p className="italic">{analysis.scientificName}</p>
-              )}
-              {analysis.className && (
-                <p className="text-stone-400 text-xs mt-0.5">{analysis.className}</p>
-              )}
-            </div>
-          )}
-
-          {analysis.nativeRegions && analysis.nativeRegions.length > 0 && (
-            <FactRow
-              icon={<Globe size={14} className="text-stone-400" />}
-              label="Native to"
-              value={analysis.nativeRegions.join(", ")}
-            />
-          )}
-
-          {analysis.speciesOverview && analysis.speciesOverview.trim().length > 0 && (
-            <div>
-              <div className="flex items-center gap-1.5 mb-2">
-                <ScrollText size={12} className="text-stone-400" />
-                <span className="text-xs font-medium uppercase tracking-wide text-stone-400">
-                  Species overview
-                </span>
+        {!speciesReady ? (
+          <p className="text-sm text-stone-400 italic">Species profile is being prepared…</p>
+        ) : (
+          <>
+            {(analysis.scientificName || analysis.className) && (
+              <div className="text-sm text-stone-600">
+                {analysis.scientificName && (
+                  <p className="italic">{analysis.scientificName}</p>
+                )}
+                {analysis.className && (
+                  <p className="text-stone-400 text-xs mt-0.5">{analysis.className}</p>
+                )}
               </div>
-              <SpeciesOverviewProse text={analysis.speciesOverview} />
-            </div>
-          )}
+            )}
 
-          {analysis.uses && analysis.uses.length > 0 && (
-            <div>
-              <div className="flex items-center gap-1.5 mb-2">
-                <Utensils size={12} className="text-stone-400" />
-                <span className="text-xs font-medium uppercase tracking-wide text-stone-400">Uses</span>
+            {analysis.nativeRegions && analysis.nativeRegions.length > 0 && (
+              <FactRow
+                icon={<Globe size={14} className="text-stone-400" />}
+                label="Native to"
+                value={analysis.nativeRegions.join(", ")}
+              />
+            )}
+
+            {analysis.speciesOverview && analysis.speciesOverview.trim().length > 0 && (
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <ScrollText size={12} className="text-stone-400" />
+                  <span className="text-xs font-medium uppercase tracking-wide text-stone-400">
+                    Species overview
+                  </span>
+                </div>
+                <SpeciesOverviewProse text={analysis.speciesOverview} />
               </div>
-              <ul className="space-y-1">
-                {analysis.uses.map((use, i) => (
-                  <li key={i} className="text-sm text-stone-600 flex gap-2">
-                    <span className="text-stone-300 flex-shrink-0">–</span>
-                    <span>{use}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+            )}
 
-          {analysis.propagationInstructions && (
-            <FactRow
-              icon={<BookOpen size={14} className="text-stone-400" />}
-              label="Propagation"
-              value={analysis.propagationInstructions}
-            />
-          )}
-        </>
-      )}
+            {analysis.uses && analysis.uses.length > 0 && (
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Utensils size={12} className="text-stone-400" />
+                  <span className="text-xs font-medium uppercase tracking-wide text-stone-400">Uses</span>
+                </div>
+                <ul className="space-y-1">
+                  {analysis.uses.map((use, i) => (
+                    <li key={i} className="text-sm text-stone-600 flex gap-2">
+                      <span className="text-stone-300 flex-shrink-0">–</span>
+                      <span>{use}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
+      </div>
 
-      <div className="pt-3 mt-1 border-t border-stone-100 space-y-2">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
+      <div className="flex flex-1 flex-col min-h-0 gap-2 border-t border-stone-100 pt-3 mt-1">
+        <div className="flex items-center justify-between gap-2 flex-wrap flex-shrink-0">
           <div className="flex items-center gap-1.5">
             <Clock size={12} className="text-stone-400" />
             <span className="text-xs font-medium uppercase tracking-wide text-stone-400">History</span>
@@ -537,27 +739,63 @@ function SpeciesPanel({
           </button>
         </div>
         {displayError && (
-          <p className="text-sm text-red-600 leading-snug" role="alert">
+          <p className="text-sm text-red-600 leading-snug flex-shrink-0" role="alert">
             {displayError}
           </p>
         )}
-        {hasSummaryText ? (
-          <div className="space-y-1">
-            <p className="text-sm text-stone-600 leading-relaxed whitespace-pre-wrap">{historySummaryText}</p>
-            {historySummaryCompletedAt && (
-              <p className="text-[10px] text-stone-400">
-                Updated {new Date(historySummaryCompletedAt).toLocaleString()}
-              </p>
-            )}
+        {hasDigestTiles ? (
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-0.5">
+            {digestTiles.map((d) => (
+              <div
+                key={d.day}
+                className="rounded-xl border border-stone-200 bg-stone-50/40 p-3 space-y-1"
+              >
+                <p className="text-[11px] font-semibold text-stone-500">
+                  {formatDayTileTitle(d.day)}
+                </p>
+                <p className="text-sm text-stone-600 leading-relaxed whitespace-pre-wrap">
+                  {d.digest}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : historyDayTiles.length > 0 ? (
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-0.5">
+            {historyDayTiles.map((tile) => (
+              <div
+                key={tile.dayKey}
+                className="rounded-xl border border-stone-200 bg-stone-50/40 p-3 space-y-1"
+              >
+                <p className="text-[11px] font-semibold text-stone-500">
+                  {formatDayTileTitle(tile.dayKey)}
+                </p>
+                <div className="divide-y divide-stone-100/80">
+                  {tile.rows.map((row, i) => (
+                    <HistoryTimelineRow
+                      key={rowKeyForTimelineRow(row, i)}
+                      row={row}
+                      heroImageUrl={heroImageUrl}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
           !displayError && (
-            <p className="text-sm text-stone-400 italic">
-              {historySummaryEligible
-                ? "Tap Generate summary to build a short timeline from your journal, photos, and care log."
-                : "Add a journal note or record watering, fertilizer, or pruning before you can generate a history summary."}
-            </p>
+            <div className="flex-1 min-h-0 flex flex-col">
+              <p className="text-sm text-stone-400 italic">
+                {historySummaryEligible
+                  ? "Tap Generate summary to build a short timeline from your journal, photos, and care log."
+                  : "Add a journal note or record watering, fertilizer, or pruning before you can generate a history summary."}
+              </p>
+            </div>
           )
+        )}
+        {hasSummaryText && historySummaryCompletedAt && (
+          <p className="text-[10px] text-stone-400 pt-0.5 flex-shrink-0">
+            Updated {new Date(historySummaryCompletedAt).toLocaleString()}
+          </p>
         )}
       </div>
     </div>
@@ -567,29 +805,98 @@ function SpeciesPanel({
 function CarePanel({
   analysis,
   reminderState,
+  placementSeed,
+  savePlacement,
+  placementSavePending,
+  placementSaveError,
+  onPlacementDialogOpen,
   onWater,
   onFertilize,
+  onPrune,
   waterPending,
   fertPending,
-  plantId,
+  prunePending,
+  careActionError,
   onArchive,
   archivePending,
   onRefresh,
   refreshPending,
+  onAddNote,
+  onAddImage,
+  addNotePending,
+  addImagePending,
+  journalNoteError,
+  journalImageError,
 }: {
   analysis: PlantDetailResponse["latestAnalysis"];
   reminderState: PlantDetailResponse["reminderState"];
+  placementSeed: string | null;
+  savePlacement: (location: string | null) => Promise<unknown>;
+  placementSavePending: boolean;
+  placementSaveError: string | null;
+  onPlacementDialogOpen: () => void;
   onWater: () => void;
   onFertilize: () => void;
+  onPrune: () => void;
   waterPending: boolean;
   fertPending: boolean;
-  plantId: number;
+  prunePending: boolean;
+  careActionError: string | null;
   onArchive: () => void;
   archivePending: boolean;
   onRefresh: () => void;
   refreshPending: boolean;
+  onAddNote: (text: string) => void;
+  onAddImage: (image: File, noteText?: string) => void;
+  addNotePending: boolean;
+  addImagePending: boolean;
+  journalNoteError: string | null;
+  journalImageError: string | null;
 }) {
+  const [placementDialogOpen, setPlacementDialogOpen] = useState(false);
+  const [placementInput, setPlacementInput] = useState("");
   const ready = analysis?.status === "COMPLETED";
+  const pg = analysis?.placementGuidance?.trim();
+  const pgG = analysis?.placementGeneralGuidance?.trim();
+  const showPlacement =
+    Boolean(placementSeed) || (ready && Boolean((pg && pg.length > 0) || (pgG && pgG.length > 0)));
+
+  const placementPrimary =
+    ready && pg
+      ? pg
+      : ready && pgG
+        ? pgG
+        : "Placement guidance updates after analysis completes.";
+  const placementDetail = ready && pg && pgG ? pgG : undefined;
+  const placementValueMuted = !ready || (!pg && !pgG);
+
+  function openPlacementDialog() {
+    onPlacementDialogOpen();
+    setPlacementInput(placementSeed ?? "");
+    setPlacementDialogOpen(true);
+  }
+
+  async function submitPlacementDialog() {
+    try {
+      const trimmed = placementInput.trim();
+      await savePlacement(trimmed === "" ? null : trimmed);
+      setPlacementDialogOpen(false);
+    } catch {
+      /* error shown via placementSaveError */
+    }
+  }
+
+  const placementRow = showPlacement ? (
+    <PlacementCareRow
+      icon={<MapPin size={14} className="text-stone-400" />}
+      label="Placement"
+      value={placementPrimary}
+      valueMuted={placementValueMuted}
+      detail={placementDetail}
+      onEdit={openPlacementDialog}
+      editDisabled={placementSavePending}
+    />
+  ) : null;
 
   return (
     <div className="rounded-2xl border border-stone-200 bg-white p-3 h-full overflow-y-auto space-y-3">
@@ -598,8 +905,59 @@ function CarePanel({
         <ReminderIconRow reminderState={reminderState} size={20} />
       </div>
 
+      <Dialog
+        open={placementDialogOpen}
+        onOpenChange={(open) => {
+          if (!open && !placementSavePending) setPlacementDialogOpen(false);
+        }}
+      >
+        <DialogContent className="sm:max-w-md" showCloseButton={!placementSavePending}>
+          <DialogHeader>
+            <DialogTitle>Placement notes</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-stone-500 leading-snug">
+            These notes are sent to the model as context for placement guidance. Saving runs a full refresh so
+            recommendations can update.
+          </p>
+          <label className="block text-xs text-stone-500">
+            <span className="sr-only">Placement notes</span>
+            <textarea
+              value={placementInput}
+              onChange={(e) => setPlacementInput(e.target.value.slice(0, 800))}
+              rows={4}
+              className="mt-1 w-full rounded-md border border-stone-200 bg-white px-2 py-1.5 text-sm text-stone-800 resize-y min-h-[5rem]"
+              placeholder="e.g. Living room, east window, morning sun…"
+              disabled={placementSavePending}
+            />
+          </label>
+          <p className="text-[11px] text-stone-400 tabular-nums">{placementInput.length}/800</p>
+          {placementSaveError && (
+            <p className="text-xs text-red-600 leading-snug" role="alert">
+              {placementSaveError}
+            </p>
+          )}
+          <div className="flex justify-end gap-2 pt-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setPlacementDialogOpen(false)}
+              disabled={placementSavePending}
+            >
+              Cancel
+            </Button>
+            <Button type="button" size="sm" onClick={() => void submitPlacementDialog()} disabled={placementSavePending}>
+              {placementSavePending ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {!ready ? (
-        <p className="text-sm text-stone-400 italic">Care profile is being prepared…</p>
+        <>
+          {placementRow}
+          <p className="text-sm text-stone-400 italic">Care profile is being prepared…</p>
+        </>
       ) : (
         <div className="space-y-2">
           {reminderState?.nextWateringInstruction && (
@@ -635,6 +993,12 @@ function CarePanel({
               detail={analysis?.pruningGeneralGuidance ?? undefined}
             />
           )}
+          {reminderState?.weatherCareNote && (
+            <div className="rounded-lg bg-sky-50 border border-sky-100 px-3 py-2 text-xs text-sky-900 leading-snug">
+              <span className="font-medium text-sky-800">Weather: </span>
+              {reminderState.weatherCareNote}
+            </div>
+          )}
           {analysis?.lightNeeds && (
             <CareRow
               icon={<Sun size={14} className="text-amber-400" />}
@@ -643,14 +1007,7 @@ function CarePanel({
               detail={analysis?.lightGeneralGuidance ?? undefined}
             />
           )}
-          {analysis?.placementGuidance && (
-            <CareRow
-              icon={<MapPin size={14} className="text-stone-400" />}
-              label="Placement"
-              value={analysis.placementGuidance}
-              detail={analysis?.placementGeneralGuidance ?? undefined}
-            />
-          )}
+          {placementRow}
           {analysis?.healthDiagnosis && (
             <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 border border-amber-100">
               <span className="font-medium">Health: </span>
@@ -668,7 +1025,7 @@ function CarePanel({
 
       {/* Action buttons */}
       <div className="pt-1.5 border-t border-stone-100 space-y-1.5">
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <Button
             variant="outline" size="sm"
             onClick={onWater} disabled={waterPending}
@@ -685,15 +1042,20 @@ function CarePanel({
             <Leaf size={13} className="mr-1" />
             {fertPending ? "…" : "Fertilized"}
           </Button>
+          <Button
+            variant="outline" size="sm"
+            onClick={onPrune} disabled={prunePending}
+            className="text-green-700 border-green-200 hover:bg-green-50 text-xs"
+          >
+            <Scissors size={13} className="mr-1" />
+            {prunePending ? "…" : "Pruned"}
+          </Button>
         </div>
-        <ButtonLink
-          href={`/plants/${plantId}/pruning`}
-          variant="outline" size="sm"
-          className="w-full text-green-700 border-green-200 hover:bg-green-50 text-xs"
-        >
-          <Scissors size={13} className="mr-1" />
-          Pruning analysis
-        </ButtonLink>
+        {careActionError && (
+          <p className="text-xs text-red-600 leading-snug" role="alert">
+            {careActionError}
+          </p>
+        )}
         <Button
           variant="ghost" size="sm"
           onClick={onRefresh} disabled={refreshPending}
@@ -710,6 +1072,152 @@ function CarePanel({
           <Archive size={13} className="mr-1" />
           Archive
         </Button>
+      </div>
+
+      <div className="pt-2 border-t border-stone-100">
+        <CareObservationInput
+          onAddNote={onAddNote}
+          onAddImage={onAddImage}
+          addNotePending={addNotePending}
+          addImagePending={addImagePending}
+          noteError={journalNoteError}
+          imageError={journalImageError}
+        />
+      </div>
+    </div>
+  );
+}
+
+function CareObservationInput({
+  onAddNote,
+  onAddImage,
+  addNotePending,
+  addImagePending,
+  noteError,
+  imageError,
+}: {
+  onAddNote: (text: string) => void;
+  onAddImage: (image: File, noteText?: string) => void;
+  addNotePending: boolean;
+  addImagePending: boolean;
+  noteError: string | null;
+  imageError: string | null;
+}) {
+  const [noteText, setNoteText] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const MAX_CHARS = 180;
+
+  function submitNote() {
+    const trimmed = noteText.trim();
+    if (!trimmed) return;
+    onAddNote(trimmed);
+    setNoteText("");
+  }
+
+  function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const caption = noteText.trim() || undefined;
+    onAddImage(file, caption);
+    setNoteText("");
+    e.target.value = "";
+  }
+
+  const journalError = noteError ?? imageError;
+
+  return (
+    <div className="rounded-2xl border border-stone-200 bg-white p-3 flex flex-col gap-2">
+        <textarea
+          value={noteText}
+          onChange={(e) => setNoteText(e.target.value.slice(0, MAX_CHARS))}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              submitNote();
+            }
+          }}
+          placeholder="Add an observation about your plant…"
+          rows={2}
+          className="w-full resize-none text-sm text-stone-700 placeholder:text-stone-300 bg-transparent outline-none leading-snug"
+        />
+        {journalError && (
+          <p className="text-xs text-red-600 leading-snug" role="alert">
+            {journalError}
+          </p>
+        )}
+        <div className="flex items-center justify-between">
+          <span className={`text-xs tabular-nums ${noteText.length >= MAX_CHARS ? "text-red-400" : "text-stone-300"}`}>
+            {noteText.length}/{MAX_CHARS}
+          </span>
+          <div className="flex items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/heic"
+              className="hidden"
+              onChange={handleImageChange}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={addImagePending}
+              className="p-1.5 rounded-full text-stone-400 hover:text-stone-600 hover:bg-stone-100 transition-colors disabled:opacity-40"
+              title={noteText.trim() ? "Add photo with note as caption" : "Add photo"}
+            >
+              <Camera size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={submitNote}
+              disabled={!noteText.trim() || addNotePending}
+              className="p-1.5 rounded-full text-green-600 hover:bg-green-50 transition-colors disabled:opacity-30"
+              title="Save note"
+            >
+              <Send size={16} />
+            </button>
+          </div>
+        </div>
+    </div>
+  );
+}
+
+function PlacementCareRow({
+  icon,
+  label,
+  value,
+  valueMuted,
+  detail,
+  onEdit,
+  editDisabled,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  valueMuted: boolean;
+  detail?: string;
+  onEdit: () => void;
+  editDisabled?: boolean;
+}) {
+  return (
+    <div className="flex gap-2 text-sm text-stone-600">
+      <span className="mt-0.5 flex-shrink-0">{icon}</span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2 mb-0.5">
+          <span className="text-xs font-medium uppercase tracking-wide text-stone-400">{label}</span>
+          <button
+            type="button"
+            onClick={onEdit}
+            disabled={editDisabled}
+            className="p-0.5 rounded-full text-stone-300 hover:text-stone-500 hover:bg-stone-100 transition-colors disabled:opacity-40 flex-shrink-0"
+            title="Edit placement notes"
+          >
+            <Pencil size={13} />
+          </button>
+        </div>
+        <span className={valueMuted ? "text-stone-500" : "text-stone-700"}>{value}</span>
+        {detail && (
+          <p className="text-xs text-stone-400 mt-1 leading-snug">{detail}</p>
+        )}
       </div>
     </div>
   );
@@ -748,107 +1256,58 @@ function FactRow({ icon, label, value }: { icon: React.ReactNode; label: string;
   );
 }
 
-function HistorySection({
-  entries,
+function rowKeyForTimelineRow(row: TimelineRow, index: number): string {
+  if (row.kind === "entry") {
+    return `e-${row.entry.id}-${row.entry.entryKind ?? "x"}-${index}`;
+  }
+  return `s-${row.at.getTime()}-${index}`;
+}
+
+function HistoryTimelineRow({
+  row,
   heroImageUrl,
-  onAddNote,
-  onAddImage,
-  addNotePending,
-  addImagePending,
 }: {
-  entries: PlantHistoryEntryDto[];
+  row: TimelineRow;
   heroImageUrl: string | null;
-  onAddNote: (text: string) => void;
-  onAddImage: (image: File, noteText?: string) => void;
-  addNotePending: boolean;
-  addImagePending: boolean;
 }) {
-  const [noteText, setNoteText] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const MAX_CHARS = 180;
-
-  function submitNote() {
-    const trimmed = noteText.trim();
-    if (!trimmed) return;
-    onAddNote(trimmed);
-    setNoteText("");
+  if (row.kind === "entry") {
+    return (
+      <HistoryEntryRow
+        entry={row.entry}
+        sameAsHero={
+          heroImageUrl != null &&
+          row.entry.image != null &&
+          row.entry.image.url === heroImageUrl
+        }
+        omitBorder
+      />
+    );
   }
+  return <HistorySummaryTextRow text={row.text} at={row.at} />;
+}
 
-  function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    onAddImage(file);
-    e.target.value = "";
-  }
+function HistorySummaryTextRow({ text, at }: { text: string; at: Date }) {
+  const showTime = at.getFullYear() >= 2000;
+  const timeStr = showTime
+    ? at.toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : null;
 
   return (
-    <div>
-      <p className="text-xs font-medium uppercase tracking-wide text-stone-400 mb-2">
-        History
-      </p>
-
-      {/* Entry list — scrolls when full */}
-      {entries.length > 0 && (
-        <div className="max-h-28 overflow-y-auto mb-2 space-y-2">
-          {entries.map((entry) => (
-            <HistoryEntryRow
-              key={entry.id}
-              entry={entry}
-              sameAsHero={
-                heroImageUrl != null &&
-                entry.image != null &&
-                entry.image.url === heroImageUrl
-              }
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Input row */}
-      <div className="rounded-2xl border border-stone-200 bg-white p-3 flex flex-col gap-2">
-        <textarea
-          value={noteText}
-          onChange={(e) => setNoteText(e.target.value.slice(0, MAX_CHARS))}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              submitNote();
-            }
-          }}
-          placeholder="Add an observation about your plant…"
-          rows={2}
-          className="w-full resize-none text-sm text-stone-700 placeholder:text-stone-300 bg-transparent outline-none leading-snug"
-        />
-        <div className="flex items-center justify-between">
-          <span className={`text-xs tabular-nums ${noteText.length >= MAX_CHARS ? "text-red-400" : "text-stone-300"}`}>
-            {noteText.length}/{MAX_CHARS}
-          </span>
-          <div className="flex items-center gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic"
-              className="hidden"
-              onChange={handleImageChange}
-            />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={addImagePending}
-              className="p-1.5 rounded-full text-stone-400 hover:text-stone-600 hover:bg-stone-100 transition-colors disabled:opacity-40"
-              title="Add photo"
-            >
-              <Camera size={16} />
-            </button>
-            <button
-              onClick={submitNote}
-              disabled={!noteText.trim() || addNotePending}
-              className="p-1.5 rounded-full text-green-600 hover:bg-green-50 transition-colors disabled:opacity-30"
-              title="Save note"
-            >
-              <Send size={16} />
-            </button>
+    <div className="flex gap-3 items-start py-2">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-stone-600 leading-relaxed whitespace-pre-wrap">{text}</p>
+        {timeStr && (
+          <div className="flex items-center gap-1 mt-1">
+            <Clock size={10} className="text-stone-300 flex-shrink-0" />
+            <span className="text-xs text-stone-400">{timeStr}</span>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -857,18 +1316,28 @@ function HistorySection({
 function HistoryEntryRow({
   entry,
   sameAsHero,
+  omitBorder,
 }: {
   entry: PlantHistoryEntryDto;
   sameAsHero?: boolean;
+  omitBorder?: boolean;
 }) {
-  const date = new Date(entry.createdAt).toLocaleDateString(undefined, {
+  const date = new Date(entry.createdAt).toLocaleString(undefined, {
     month: "short",
     day: "numeric",
     year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
   });
 
   return (
-    <div className="flex gap-3 items-start py-2 border-b border-stone-100 last:border-0">
+    <div
+      className={
+        omitBorder
+          ? "flex gap-3 items-start py-2"
+          : "flex gap-3 items-start py-2 border-b border-stone-100 last:border-0"
+      }
+    >
       {entry.image ? (
         <div className="relative w-14 h-14 rounded-lg overflow-hidden bg-stone-100 flex-shrink-0">
           <Image

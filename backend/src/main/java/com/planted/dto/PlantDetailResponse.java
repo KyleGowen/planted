@@ -15,6 +15,9 @@ public record PlantDetailResponse(
         String geoCountry,
         String geoState,
         String geoCity,
+        String growingContext,
+        Double latitude,
+        Double longitude,
         String status,
         PlantImageDto illustratedImage,
         List<PlantImageDto> originalImages,
@@ -25,6 +28,8 @@ public record PlantDetailResponse(
         boolean hasActiveJobs,
         List<PlantHistoryEntryDto> historyEntries,
         String historySummaryText,
+        /** Per-local-day narratives from the latest completed history summary job (newest day first). Empty for legacy summaries. */
+        List<HistoryDailyDigestDto> historyDailyDigests,
         OffsetDateTime historySummaryCompletedAt,
         String historySummaryError,
         /** True when the plant has journal entries or at least one care event (required to enqueue a history summary). */

@@ -1,6 +1,7 @@
 import type {
   CreatePlantResponse,
   PlantDetailResponse,
+  PlantGrowingContext,
   PlantListItemResponse,
   PlantReminderResponse,
   RecordFertilizerRequest,
@@ -51,8 +52,16 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
     throw new Error(errorMessage);
   }
 
-  if (res.status === 204) return undefined as T;
-  return res.json();
+  if (res.status === 204 || res.status === 205) {
+    return undefined as T;
+  }
+
+  const text = await res.text();
+  if (!text.trim()) {
+    return undefined as T;
+  }
+
+  return JSON.parse(text) as T;
 }
 
 // ── Plant registration ──────────────────────────────────────────────────────
@@ -151,6 +160,29 @@ export async function updatePlantName(plantId: number, name: string | null): Pro
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name }),
+  });
+}
+
+export async function updatePlantGrowing(
+  plantId: number,
+  body: { growingContext: PlantGrowingContext; latitude: number | null; longitude: number | null }
+): Promise<void> {
+  return apiFetch<void>(`/api/plants/${plantId}/growing`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+/** Persists placement seed text and enqueues reanalysis (same response shape as requestReanalysis). */
+export async function updatePlantPlacement(
+  plantId: number,
+  location: string | null
+): Promise<RequestReanalysisResponse> {
+  return apiFetch<RequestReanalysisResponse>(`/api/plants/${plantId}/placement`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ location }),
   });
 }
 

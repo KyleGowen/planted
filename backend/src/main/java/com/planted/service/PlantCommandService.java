@@ -36,6 +36,7 @@ public class PlantCommandService {
     private final PlantHistoryEntryRepository historyEntryRepository;
     private final ImageStorageService imageStorageService;
     private final PlantJobPublisher jobPublisher;
+    private final PlantReminderService plantReminderService;
 
     @Value("${planted.user.default-id:default}")
     private String defaultUserId;
@@ -49,9 +50,14 @@ public class PlantCommandService {
             OffsetDateTime lastWateredAt,
             String geoCountry,
             String geoState,
-            String geoCity) {
+            String geoCity,
+            PlantGrowingContext growingContext,
+            Double latitude,
+            Double longitude) {
 
         validateImageFile(imageFile);
+
+        PlantGrowingContext ctx = growingContext != null ? growingContext : PlantGrowingContext.INDOOR;
 
         // Create plant record
         Plant plant = Plant.builder()
@@ -62,6 +68,9 @@ public class PlantCommandService {
                 .geoCountry(geoCountry)
                 .geoState(geoState)
                 .geoCity(geoCity)
+                .growingContext(ctx)
+                .latitude(latitude)
+                .longitude(longitude)
                 .status(PlantStatus.ACTIVE)
                 .build();
         plant = plantRepository.save(plant);
@@ -142,10 +151,7 @@ public class PlantCommandService {
         wateringEventRepository.save(event);
         log.info("Watering recorded for plant {}", plantId);
 
-        jobPublisher.publish(PlantJobMessage.builder()
-                .jobType(PlantJobMessage.JobType.PLANT_REMINDER_RECOMPUTE)
-                .plantId(plantId)
-                .build());
+        plantReminderService.recomputeReminderState(plantId);
     }
 
     @Transactional
@@ -160,10 +166,7 @@ public class PlantCommandService {
         fertilizerEventRepository.save(event);
         log.info("Fertilizer recorded for plant {}", plantId);
 
-        jobPublisher.publish(PlantJobMessage.builder()
-                .jobType(PlantJobMessage.JobType.PLANT_REMINDER_RECOMPUTE)
-                .plantId(plantId)
-                .build());
+        plantReminderService.recomputeReminderState(plantId);
     }
 
     @Transactional
@@ -196,10 +199,7 @@ public class PlantCommandService {
         pruneEventRepository.save(event);
         log.info("Prune event recorded for plant {}", plantId);
 
-        jobPublisher.publish(PlantJobMessage.builder()
-                .jobType(PlantJobMessage.JobType.PLANT_REMINDER_RECOMPUTE)
-                .plantId(plantId)
-                .build());
+        plantReminderService.recomputeReminderState(plantId);
     }
 
     @Transactional
@@ -264,9 +264,46 @@ public class PlantCommandService {
     }
 
     @Transactional
+    public void updatePlantGrowing(Long plantId, UpdatePlantGrowingRequest request) {
+        Plant plant = findActivePlant(plantId);
+        PlantGrowingContext ctx;
+        try {
+            ctx = PlantGrowingContext.valueOf(request.growingContext().trim().toUpperCase());
+        } catch (Exception e) {
+            throw new IllegalArgumentException("growingContext must be INDOOR or OUTDOOR");
+        }
+        plant.setGrowingContext(ctx);
+        plant.setLatitude(request.latitude());
+        plant.setLongitude(request.longitude());
+        plantRepository.save(plant);
+        jobPublisher.publish(PlantJobMessage.builder()
+                .jobType(PlantJobMessage.JobType.PLANT_REMINDER_RECOMPUTE)
+                .plantId(plantId)
+                .build());
+        log.info("Plant growing context updated: id={}, context={}", plantId, ctx);
+    }
+
+    @Transactional
     public RequestReanalysisResponse requestReanalysis(Long plantId) {
         findActivePlant(plantId);
+        return enqueueReanalysis(plantId);
+    }
 
+    /**
+     * Updates persisted placement seed text and enqueues a full reanalysis so
+     * {@code placementGuidance} / {@code placementGeneralGuidance} reflect the new context.
+     */
+    @Transactional
+    public RequestReanalysisResponse updatePlantPlacement(Long plantId, String location) {
+        Plant plant = findActivePlant(plantId);
+        String trimmed = location != null ? location.trim() : null;
+        plant.setLocation((trimmed == null || trimmed.isEmpty()) ? null : trimmed);
+        plantRepository.save(plant);
+        log.info("Plant placement seed updated: id={}", plantId);
+        return enqueueReanalysis(plantId);
+    }
+
+    private RequestReanalysisResponse enqueueReanalysis(Long plantId) {
         PlantAnalysis analysis = PlantAnalysis.builder()
                 .plantId(plantId)
                 .analysisType(PlantAnalysis.AnalysisType.REANALYSIS)

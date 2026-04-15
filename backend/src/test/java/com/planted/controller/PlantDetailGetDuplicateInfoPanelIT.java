@@ -18,6 +18,8 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Map;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -79,7 +81,33 @@ class PlantDetailGetDuplicateInfoPanelIT {
         mockMvc.perform(get("/api/plants/" + plant.getId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(plant.getId()))
-                .andExpect(jsonPath("$.historySummaryText").value("Newer summary body"));
+                .andExpect(jsonPath("$.historySummaryText").value("Newer summary body"))
+                .andExpect(jsonPath("$.historyDailyDigests").isArray())
+                .andExpect(jsonPath("$.historyDailyDigests.length()").value(0));
+    }
+
+    @Test
+    void getPlant_returnsHistoryDailyDigestsFromRawJson() throws Exception {
+        Plant plant = new Plant();
+        plant.setName("Digest plant");
+        plant.setStatus(PlantStatus.ACTIVE);
+        plant = plantRepository.save(plant);
+
+        analysisRepository.save(PlantAnalysis.builder()
+                .plantId(plant.getId())
+                .analysisType(PlantAnalysis.AnalysisType.INFO_PANEL)
+                .status(PlantAnalysis.AnalysisStatus.COMPLETED)
+                .infoPanelSummary("2026-04-14: Watered twice.")
+                .rawModelResponseJsonb(Map.of(
+                        "dailyDigests",
+                        List.of(Map.of("day", "2026-04-14", "digest", "Watered twice in the evening."))))
+                .completedAt(OffsetDateTime.parse("2025-06-01T12:00:00Z"))
+                .build());
+
+        mockMvc.perform(get("/api/plants/" + plant.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.historyDailyDigests[0].day").value("2026-04-14"))
+                .andExpect(jsonPath("$.historyDailyDigests[0].digest").value("Watered twice in the evening."));
     }
 
     @Test

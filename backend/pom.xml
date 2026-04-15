@@ -88,6 +88,13 @@
             <version>3.7.3</version>
         </dependency>
 
+        <!-- Lat/lon → timezone for history digest day boundaries (embedded dataset, no network) -->
+        <dependency>
+            <groupId>net.iakovlev</groupId>
+            <artifactId>timeshape</artifactId>
+            <version>2024a.25</version>
+        </dependency>
+
         <!-- HTTP client for OpenAI -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

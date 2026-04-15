@@ -12,12 +12,13 @@ Java 21, Spring Boot, Maven, Spring Web, Spring Data JPA, PostgreSQL, AWS S3 (pr
 ## Local dev and LAN
 - **`local` profile:** `LocalImageStorageService.getUrl` returns **root-relative** `/images/...` unless **`planted.storage.public-base-url`** is set (for clients that hit Spring directly). Next.js dev proxies `/images` to Spring when the UI is on :3000.
 - **CORS:** `planted.cors.allowed-origin-patterns` in `application.yml` (see `PlantedCorsProperties` / `WebConfig`). Direct browser→Spring calls need this; traffic via Next same-origin `/api` does not.
+- **History summary (async `PLANT_HISTORY_SUMMARY`):** Prompts live in **`llm_prompts`** (`plant_history_summary_v2`); output is structured **`daily_digests`** in raw JSON plus flattened `info_panel_summary`. **`planted.history.day-boundary-zone`** (or env `PLANTED_HISTORY_DAY_BOUNDARY_ZONE`) defaults calendar-day grouping when the plant lacks coordinates; with lat/lon, use **`TimeZoneEngine`** (TimeShape). **`PlantDetailResponse`** exposes **`historyDailyDigests`** parsed from the latest completed summary’s raw JSON. After editing Flyway prompt migrations, **restart the backend** so Flyway applies them.
 
 ## Architectural Rules
 1. **Async-first is the default.** User-facing requests must never block on LLM or image generation work.
 2. Background jobs must be record-ID based and retry-friendly.
 3. Persist both normalized fields AND raw JSONB model responses.
-4. Use interfaces around storage (`ImageStorageService`), queue (`PlantJobPublisher`), and external AI integrations (`OpenAiPlantClient`).
+4. Use interfaces around storage (`ImageStorageService`), queue (`PlantJobPublisher`), external AI (`OpenAiPlantClient`), and **weather** (`WeatherService` / Open-Meteo — job path only, not HTTP threads).
 5. Keep list rendering fast with persisted `PlantReminderState` — never compute from live model calls.
 6. Soft delete plants — never hard delete.
 
@@ -57,7 +58,10 @@ Recompute `PlantReminderState` whenever:
 - Prune event recorded
 - Registration analysis completes
 - Reanalysis completes
-- Scheduled periodic recompute runs
+- **`PATCH /api/plants/{id}/growing`** (growing context or coordinates change)
+- **`OutdoorReminderRefreshScheduler`** (cron) for active **outdoor** plants with lat/lon — enqueues `PLANT_REMINDER_RECOMPUTE` so weather-informed copy can refresh without a care event
+
+Outdoor recomputes may call **`WeatherService`** (Open-Meteo by default); disable with `planted.weather.enabled=false`. Persisted fields include optional **`weather_care_note`** on `plant_reminder_state`.
 
 ## Prompt Storage Rules
 - Prompt body stored as `TEXT`, never `VARCHAR(n)`

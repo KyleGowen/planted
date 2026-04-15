@@ -27,6 +27,9 @@ alwaysApply: true
 ## Ship vs feature work
 For **ship** (commit + push), follow **[scripts/ship-checklist.md](scripts/ship-checklist.md)** and **[.cursor/rules/ship.mdc](.cursor/rules/ship.mdc)** — include documentation and Cursor context updates when applicable, not only git.
 
+## Local stack after backend / schema changes
+When a change **requires a database migration** (new or edited Flyway script under `backend/src/main/resources/db/migration/`) or **requires the Spring Boot process to reload** (e.g. new/changed beans, `application.yml`, prompt-only DB updates applied at startup, dependency changes), **finish the task by applying it in the dev environment**: run Flyway (typically by **restarting the backend** with the `local` profile so migrations run), and **restart the backend** if code changes won’t be picked up by a running JVM. If the change also depends on Postgres, ensure the Docker Postgres service is up. **Do not only edit files**—verify the migration applied or the server restarted so the user can test immediately. Frontend-only changes do not require a backend restart unless API contracts or env changed.
+
 ## Feature Definition of Done
 1. Feature compiles with no errors
 2. All new code is fully covered by unit tests

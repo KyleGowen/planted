@@ -5,6 +5,7 @@ import com.planted.client.PlantHistorySummarySchema;
 import com.planted.entity.*;
 import com.planted.queue.PlantJobMessage;
 import com.planted.repository.*;
+import com.planted.service.HistorySummaryDayZoneResolver;
 import com.planted.service.PlantHistorySummaryPersistenceHelper;
 import com.planted.service.UserPhysicalAddressService;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
@@ -42,6 +44,7 @@ public class PlantHistorySummaryProcessor {
     private final OpenAiPlantClient openAiClient;
     private final PlantHistorySummaryPersistenceHelper persistenceHelper;
     private final UserPhysicalAddressService userPhysicalAddressService;
+    private final HistorySummaryDayZoneResolver historyDayZoneResolver;
 
     public void process(PlantJobMessage message) {
         Long plantId = message.getPlantId();
@@ -71,8 +74,13 @@ public class PlantHistorySummaryProcessor {
             List<PlantPruneEvent> prunes = pruneEventRepository
                     .findByPlantIdOrderByPrunedAtDesc(plantId);
 
+            ZoneId dayZone = historyDayZoneResolver.resolveZone(plant.getLatitude(), plant.getLongitude());
+            String groupedByDay = PlantHistorySummaryDayGroupBuilder.buildGroupedSection(
+                    dayZone, journalOldest, waterings, ferts, prunes, MAX_CARE_EVENTS_PER_TYPE);
             String timelineCore = PlantHistorySummaryTimelineBuilder.buildTimelineText(
                     journalOldest, waterings, ferts, prunes, MAX_CARE_EVENTS_PER_TYPE);
+            String timelineText = groupedByDay + "\n\n=== Detailed chronological log (reference; same facts) ===\n\n"
+                    + timelineCore;
 
             Optional<PlantAnalysis> latestCare = analysisRepository
                     .findFirstByPlantIdAndAnalysisTypeInAndStatusOrderByCompletedAtDescIdDesc(
@@ -107,7 +115,7 @@ public class PlantHistorySummaryProcessor {
             }
 
             PlantImage baselineForCaption = baselineResult.baselineAttached() ? baselineOpt.orElse(null) : null;
-            String timelineText = appendVisionCaptionSection(timelineCore, baselineForCaption, journalPhotos);
+            timelineText = appendVisionCaptionSection(timelineText, baselineForCaption, journalPhotos);
 
             String imageCountLabel = buildImageCountLabel(baselineResult.baselineAttached(), journalPhotos.size());
             String speciesLabel = plant.getSpeciesLabel() != null ? plant.getSpeciesLabel()
@@ -131,13 +139,15 @@ public class PlantHistorySummaryProcessor {
                     plantId,
                     analysisId);
 
-            if (result.getSummary() == null || result.getSummary().isBlank()) {
+            String flattened = result.flattenForStorage();
+            if (flattened.isBlank()) {
                 throw new IllegalStateException("Model returned an empty summary.");
             }
 
             Map<String, Object> raw = new HashMap<>();
-            raw.put("summary", result.getSummary());
-            persistenceHelper.markCompleted(analysisId, result.getSummary().trim(), raw);
+            raw.put("dailyDigests", result.getDailyDigests());
+            raw.put("summary", flattened);
+            persistenceHelper.markCompleted(analysisId, flattened, raw);
 
             log.info("Plant history summary completed for plant {}", plantId);
         } catch (Throwable t) {
