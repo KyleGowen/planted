@@ -674,29 +674,35 @@ function SpeciesPanel({
   return (
     <div className="rounded-2xl border border-stone-200 bg-white p-3 h-full flex flex-col gap-3 min-h-0 overflow-hidden">
       <div className="flex-[0_1_auto] min-h-0 overflow-y-auto space-y-3">
-        <p className="text-xs font-medium uppercase tracking-wide text-stone-400">About This Plant</p>
-
         {!speciesReady ? (
           <p className="text-sm text-stone-400 italic">Species profile is being prepared…</p>
         ) : (
           <>
-            {(analysis.scientificName || analysis.className) && (
-              <div className="text-sm text-stone-600">
-                {analysis.scientificName && (
-                  <p className="italic">{analysis.scientificName}</p>
+            {((analysis.scientificName || analysis.className) ||
+              (analysis.nativeRegions && analysis.nativeRegions.length > 0)) && (
+              <div
+                className={`flex items-start gap-4 ${
+                  analysis.nativeRegions && analysis.nativeRegions.length > 0
+                    ? analysis.scientificName || analysis.className
+                      ? "justify-between"
+                      : "justify-end"
+                    : ""
+                }`}
+              >
+                {(analysis.scientificName || analysis.className) && (
+                  <div className="text-sm text-stone-600 min-w-0 flex-1">
+                    {analysis.scientificName && (
+                      <p className="text-lg italic">{analysis.scientificName}</p>
+                    )}
+                    {analysis.className && (
+                      <p className="text-stone-400 text-xs mt-0.5">{analysis.className}</p>
+                    )}
+                  </div>
                 )}
-                {analysis.className && (
-                  <p className="text-stone-400 text-xs mt-0.5">{analysis.className}</p>
+                {analysis.nativeRegions && analysis.nativeRegions.length > 0 && (
+                  <NativeToAside value={analysis.nativeRegions.join(", ")} />
                 )}
               </div>
-            )}
-
-            {analysis.nativeRegions && analysis.nativeRegions.length > 0 && (
-              <FactRow
-                icon={<Globe size={14} className="text-stone-400" />}
-                label="Native to"
-                value={analysis.nativeRegions.join(", ")}
-              />
             )}
 
             {analysis.speciesOverview && analysis.speciesOverview.trim().length > 0 && (
@@ -1327,16 +1333,15 @@ function CareRow({ icon, label, value, highlight, detail }: {
   );
 }
 
-function FactRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+/** Right-aligned native range, paired on the same row as the species name in the species pane. */
+function NativeToAside({ value }: { value: string }) {
   return (
-    <div className="flex gap-2 text-sm text-stone-600">
-      <span className="mt-0.5 flex-shrink-0">{icon}</span>
-      <div>
-        <span className="text-xs font-medium uppercase tracking-wide text-stone-400 block mb-0.5">
-          {label}
-        </span>
-        <span>{value}</span>
+    <div className="flex flex-col items-end gap-0.5 shrink-0 max-w-[min(50%,14rem)] text-right">
+      <div className="flex items-center gap-1.5 justify-end">
+        <Globe size={14} className="text-stone-400 shrink-0" />
+        <span className="text-xs font-medium uppercase tracking-wide text-stone-400">Native to</span>
       </div>
+      <p className="text-sm text-stone-600 leading-snug">{value}</p>
     </div>
   );
 }
