@@ -3,10 +3,9 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import Image from "next/image";
-import { Sprout, X } from "lucide-react";
-import { listPlants } from "@/lib/api";
-import type { PlantListItemResponse } from "@/types/plant";
+import { getPlant, listPlants } from "@/lib/api";
+import type { PlantImageDto, PlantListItemResponse } from "@/types/plant";
+import { PlantBioView } from "@/components/plant/PlantBioView";
 
 const DISPLAY_DURATION_MS = 60_000;
 
@@ -29,32 +28,108 @@ export default function ScreensaverPage() {
     staleTime: 60_000,
   });
 
+  // Reshuffle only when the set of plant IDs changes, so background refetches
+  // don't jump the user to a new slide mid-viewing.
+  const plantIdKey = useMemo(() => {
+    if (!plants || plants.length === 0) return "";
+    return [...plants.map((p) => p.id)].sort((a, b) => a - b).join(",");
+  }, [plants]);
+
   const queue = useMemo<PlantListItemResponse[]>(() => {
     if (!plants || plants.length === 0) return [];
     return shuffle(plants);
-  }, [plants]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plantIdKey]);
 
-  // Enter fullscreen on mount
+  const current = queue.length > 0 ? queue[currentIndex % queue.length] : undefined;
+  const currentPlantId = current?.id ?? null;
+
+  // Fetch the full bio for the currently visible plant so PlantBioView can
+  // render the same layout as the detail page. Background polling is disabled
+  // — a plant only stays on screen for DISPLAY_DURATION_MS.
+  const { data: detail } = useQuery({
+    queryKey: ["plant", currentPlantId],
+    queryFn: () => getPlant(currentPlantId as number),
+    enabled: currentPlantId != null,
+    staleTime: 60_000,
+  });
+
   useEffect(() => {
+    let enteredFullscreen = false;
     const el = document.documentElement;
-    el.requestFullscreen?.().catch(() => {});
+    el.requestFullscreen?.()
+      .then(() => {
+        enteredFullscreen = true;
+      })
+      .catch(() => {});
+
+    // Escape in fullscreen is consumed by the browser to exit fullscreen, so
+    // our keydown listener never sees it. Treat the fullscreen exit itself as
+    // the signal to leave the screensaver.
+    const onFsChange = () => {
+      if (enteredFullscreen && document.fullscreenElement == null) {
+        router.push("/plants");
+      }
+    };
+    document.addEventListener("fullscreenchange", onFsChange);
+
     return () => {
+      document.removeEventListener("fullscreenchange", onFsChange);
       if (document.fullscreenElement) {
         document.exitFullscreen?.().catch(() => {});
       }
     };
+  }, [router]);
+
+  // Prevent the display from dimming / sleeping while the screensaver is
+  // running. The Screen Wake Lock is auto-released when the tab becomes
+  // hidden, so re-acquire it whenever visibility returns.
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("wakeLock" in navigator)) return;
+    let sentinel: WakeLockSentinel | null = null;
+    let cancelled = false;
+
+    const acquire = async () => {
+      try {
+        const lock = await navigator.wakeLock.request("screen");
+        if (cancelled) {
+          lock.release().catch(() => {});
+          return;
+        }
+        sentinel = lock;
+        lock.addEventListener("release", () => {
+          if (sentinel === lock) sentinel = null;
+        });
+      } catch {
+        // Best-effort: ignore unsupported / denied requests.
+      }
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible" && sentinel == null) {
+        void acquire();
+      }
+    };
+
+    void acquire();
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisibility);
+      sentinel?.release().catch(() => {});
+      sentinel = null;
+    };
   }, []);
 
-  // Cycle every 30 seconds
   useEffect(() => {
-    if (queue.length === 0) return;
+    if (queue.length <= 1) return;
     const timer = setInterval(() => {
       setCurrentIndex((prev) => (prev + 1) % queue.length);
     }, DISPLAY_DURATION_MS);
     return () => clearInterval(timer);
   }, [queue]);
 
-  // Escape exits
   const handleExit = useCallback(() => {
     if (document.fullscreenElement) {
       document.exitFullscreen?.().catch(() => {});
@@ -70,99 +145,60 @@ export default function ScreensaverPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [handleExit]);
 
-  const current = queue.length > 0 ? queue[currentIndex % queue.length] : undefined;
+  const detailMatchesCurrent = detail?.id === currentPlantId;
+
+  // Re-roll the secondary image each time a plant is selected for a slide.
+  // Pool = history photos + real reference images, excluding the hero so the
+  // two panels never show the exact same picture. Text/html reference entries
+  // are iNat/GBIF link tiles, not actual images.
+  const secondaryImage = useMemo<PlantImageDto | null>(() => {
+    if (!detail || !detailMatchesCurrent) return null;
+    const hero = detail.illustratedImage ?? detail.originalImages[0] ?? null;
+    const history = [...detail.originalImages, ...detail.pruneUpdateImages];
+    const reference = detail.healthyReferenceImages.filter(
+      (img) => img.mimeType !== "text/html"
+    );
+    const pool = [...history, ...reference].filter(
+      (img) => img.url !== hero?.url
+    );
+    if (pool.length === 0) return null;
+    return pool[Math.floor(Math.random() * pool.length)];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentIndex, detail?.id, detailMatchesCurrent]);
+
+  // If the current plant has no usable secondary image (no history and no
+  // reference photos), skip forward so the screensaver never shows a blank
+  // second panel.
+  useEffect(() => {
+    if (!detail || !detailMatchesCurrent) return;
+    if (secondaryImage == null && queue.length > 1) {
+      setCurrentIndex((i) => (i + 1) % queue.length);
+    }
+  }, [detail, detailMatchesCurrent, secondaryImage, queue.length]);
 
   return (
-    <div className="fixed inset-0 bg-stone-950 text-white overflow-hidden">
-      {/* Exit button */}
-      <button
-        onClick={handleExit}
-        className="absolute top-4 right-4 z-50 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-        aria-label="Exit screensaver"
-      >
-        <X size={18} />
-      </button>
-
-      {/* Progress bar */}
-      <div className="absolute top-0 left-0 right-0 h-0.5 bg-white/10 z-40">
+    <div className="fixed inset-0 bg-stone-50 overflow-hidden">
+      <div className="absolute top-0 left-0 right-0 h-0.5 bg-stone-200/60 z-40">
         <div
           key={currentIndex}
-          className="h-full bg-white/30"
+          className="h-full bg-stone-400/70"
           style={{
             animation: `progress ${DISPLAY_DURATION_MS}ms linear forwards`,
           }}
         />
       </div>
 
-      {/* Plant display */}
-      {current ? (
-        <div className="flex h-full items-center justify-center">
-          {/* Background image (blurred) */}
-          {current.illustratedImage && (
-            <div className="absolute inset-0">
-              <Image
-                src={current.illustratedImage.url}
-                alt=""
-                fill
-                className="object-cover opacity-20 blur-xl scale-110"
-              />
-            </div>
-          )}
-
-          {/* Main content */}
-          <div className="relative z-10 flex flex-col items-center gap-6 px-8 text-center max-w-lg">
-            {/* Illustrated image */}
-            <div className="relative h-64 w-64 rounded-2xl overflow-hidden bg-white/5">
-              {current.illustratedImage ? (
-                <Image
-                  src={current.illustratedImage.url}
-                  alt={current.displayLabel}
-                  fill
-                  className="object-cover"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center">
-                  <Sprout size={48} className="text-white/20" />
-                </div>
-              )}
-            </div>
-
-            {/* Plant identity */}
-            <div>
-              {current.name ? (
-                <>
-                  <h2 className="text-3xl font-semibold tracking-tight plant-name text-white">
-                    {current.name}
-                  </h2>
-                  {(current.genus || current.species) && (
-                    <p className="text-white/50 italic mt-1 species-label">
-                      {[current.genus, current.species].filter(Boolean).join(" ")}
-                    </p>
-                  )}
-                </>
-              ) : (
-                <h2 className="text-3xl font-semibold italic tracking-tight plant-name species-label text-white">
-                  {current.speciesLabel ?? "Unknown plant"}
-                </h2>
-              )}
-            </div>
-
-            {/* Plant counter */}
-            <div className="flex gap-1.5">
-              {queue.map((_, i) => (
-                <span
-                  key={i}
-                  className={`h-1 rounded-full transition-all ${
-                    i === currentIndex ? "w-4 bg-white/70" : "w-1 bg-white/20"
-                  }`}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
+      {current && detail && detailMatchesCurrent ? (
+        <main className="h-full w-full flex flex-col px-3 py-2">
+          <PlantBioView
+            plant={detail}
+            readOnly
+            screensaverAuxImage={secondaryImage}
+          />
+        </main>
       ) : (
-        <div className="flex h-full items-center justify-center text-white/30 text-sm">
-          Loading your plants…
+        <div className="flex h-full items-center justify-center text-sm text-stone-400 italic">
+          {queue.length === 0 ? "Loading your plants…" : "Loading plant bio…"}
         </div>
       )}
 
