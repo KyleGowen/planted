@@ -27,9 +27,17 @@ Next.js **16** (App Router), TypeScript, Tailwind CSS, shadcn/ui, TanStack Query
 ## Async UX Rules (critical)
 - Never leave the user with unexplained loading
 - Always distinguish: `PENDING` / `PROCESSING` / `COMPLETED` / `FAILED`
-- Poll detail pages while any analysis status is PENDING or PROCESSING (`refetchInterval: 3000`)
+- Poll detail pages while any analysis status is PENDING or PROCESSING **or while any bio section is refreshing** (`refetchInterval: hasRefreshingBioSections(data) ? 3000 : false`)
 - Keep list views fast — driven from persisted `PlantReminderState`, never fresh model calls
 - Use optimistic UI only when safe and reversible
+
+## Plant bio sections on the client
+The detail page reads per-section cached data from `plant.bioSections` (see `PlantDetailResponse.bioSections` in `src/types/plant.ts`). Always access it via the helpers in **`src/lib/bioSections.ts`** — never reach into `bioSections` directly from a component.
+
+- `getSpeciesIdSection(plant)`, `getHealthSection(plant)`, `getSpeciesDescriptionSection(plant)`, and one helper per care topic return a `BioSectionView` with `content`, `status`, and `isRefreshing`.
+- **`flattenBioSectionsToAnalysis(plant)`** projects bio section content into the legacy `AnalysisSummaryDto` shape so existing UI (care accordions, species panel) keeps working while backend backfill proceeds. Prefer this over raw `plant.latestAnalysis`.
+- **`hasRefreshingBioSections(plant)`** is the signal for detail-page `refetchInterval`. Care accordions and the species/health panels should forward a `refreshing` prop and show a subtle "Updating…" hint (never a blocking spinner) when that section is still regenerating.
+- New plants may have all sections refreshing simultaneously on first view — render per-section skeletons ("Identifying species…", "Species profile is being prepared…", "Checking health…") rather than one global spinner.
 
 ## TanStack Query Patterns
 - `useQuery` for list and detail reads with appropriate `staleTime`

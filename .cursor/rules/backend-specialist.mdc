@@ -9,10 +9,32 @@ alwaysApply: false
 ## Stack
 Java 21, Spring Boot, Maven, Spring Web, Spring Data JPA, PostgreSQL, AWS S3 (prod), local file storage (local dev), Amazon SQS (prod), OpenAI Responses API.
 
+## Prompt catalog
+Every LLM prompt the app sends is documented in [`docs/prompts/`](../../docs/prompts/README.md) — overview + one file per `prompt_key` with the verbatim bodies, injected variables, output schema, and call sites. When you change a prompt migration, `OpenAiPlantClient`, a bio strategy, or a related worker, update the matching doc in the same commit (see the `prompt-catalog` rule).
+
 ## Local dev and LAN
 - **`local` profile:** `LocalImageStorageService.getUrl` returns **root-relative** `/images/...` unless **`planted.storage.public-base-url`** is set (for clients that hit Spring directly). Next.js dev proxies `/images` to Spring when the UI is on :3000.
 - **CORS:** `planted.cors.allowed-origin-patterns` in `application.yml` (see `PlantedCorsProperties` / `WebConfig`). Direct browser→Spring calls need this; traffic via Next same-origin `/api` does not.
 - **History summary (async `PLANT_HISTORY_SUMMARY`):** Prompts live in **`llm_prompts`** (`plant_history_summary_v2`); output is structured **`daily_digests`** in raw JSON plus flattened `info_panel_summary`. **`planted.history.day-boundary-zone`** (or env `PLANTED_HISTORY_DAY_BOUNDARY_ZONE`) defaults calendar-day grouping when the plant lacks coordinates; with lat/lon, use **`TimeZoneEngine`** (TimeShape). **`PlantDetailResponse`** exposes **`historyDailyDigests`** parsed from the latest completed summary’s raw JSON. After editing Flyway prompt migrations, **restart the backend** so Flyway applies them.
+
+## Plant bio sections (decomposed per-section cache)
+The monolithic `plant_registration_analysis_v1` prompt has been split into **nine independently cached bio sections** stored in `plant_bio_sections`. Each section has its own prompt, schema, and refresh lifecycle. Reads are always served from the cache; refreshes are enqueued lazily on view (or proactively by the species-change cascade).
+
+- **Table:** `plant_bio_sections (plant_id, section_key, status, content_jsonb, prompt_key, prompt_version, inputs_fingerprint, generated_at, last_error)` with `UNIQUE (plant_id, section_key)`. Migration: **`V38__plant_bio_sections.sql`**. `inputs_fingerprint` is `VARCHAR(64)` (sha256 hex).
+- **Section keys:** `PlantBioSectionKey` — `SPECIES_ID` (vision), `HEALTH_ASSESSMENT` (vision), `SPECIES_DESCRIPTION`, `WATER_CARE`, `FERTILIZER_CARE`, `PRUNING_CARE`, `LIGHT_CARE`, `PLACEMENT_CARE`, `HISTORY_SUMMARY` (all text). Two vision + seven text keeps token spend low; only `SPECIES_ID` / `HEALTH_ASSESSMENT` carry the photo.
+- **Prompts:** Migration **`V39__bio_section_prompts_v1.sql`** seeds one v1 row per prompt key (`plant_species_id_v1`, `plant_health_assessment_v1`, `plant_species_description_v1`, `plant_water_care_v1`, `plant_fertilizer_care_v1`, `plant_pruning_care_v1`, `plant_light_care_v1`, `plant_placement_care_v1`, `plant_history_summary_bio_v1`). **Handlebars `{{...}}` must never sit directly after a Postgres dollar-quote tag** (`$tag$`) — Flyway parses `${...}` as a placeholder; always separate with a newline.
+- **Strategy beans:** One `@Component` per key in `com.planted.bio.strategies`, each implementing `PlantBioSectionStrategy` (`key()`, `promptKey()`, `inputs(plant, ctx)`, `schema()`). Schemas live in `BioSectionSchemas` (public so strategies can reference them).
+- **Job flow:** New `PlantJobMessage.JobType.PLANT_BIO_SECTION_REFRESH` carries `sectionKey`. `PlantJobWorker` dispatches to **`PlantBioSectionProcessor`**, which (1) builds `BioSectionContext`, (2) computes an input fingerprint from `(promptKey, sorted inputs, primary image id)`, (3) **cache-hits out before calling OpenAI** when fingerprint matches and not TTL-expired, (4) calls `OpenAiPlantClient.generateBioSection(promptKey, vars, schema, imagesBase64, mimeTypes, plantId)` which handles prompt resolution, vision vs text routing, and `llm_requests` auditing, (5) persists `content_jsonb` + `prompt_version` + `inputs_fingerprint` + `generated_at`, and (6) **cascades on SPECIES_ID**: if the resolved species actually changed, invalidate and enqueue every `PlantBioSectionKey.speciesDependent()` section. `SPECIES_ID` also denormalizes genus/species/family/class onto the `Plant` row so list views stay fast.
+- **Invalidation:** `BioSectionInvalidator` is the single chokepoint. Invalidation zeroes `generated_at` + `inputs_fingerprint` so the next read lazy-refreshes; only registration, reanalysis, and the species cascade proactively enqueue jobs.
+  - `onGrowingChanged` → `WATER_CARE, FERTILIZER_CARE, PRUNING_CARE, LIGHT_CARE, PLACEMENT_CARE`
+  - `onPlacementChanged` → `PLACEMENT_CARE, LIGHT_CARE, WATER_CARE`
+  - `onJournalChanged` → `HISTORY_SUMMARY`
+  - `onReanalysisRequested` → enqueues `SPECIES_ID` + `HEALTH_ASSESSMENT` (rest cascades from SPECIES_ID)
+- **Lazy refresh on read:** `PlantQueryService.getPlantDetail` loads all `plant_bio_sections` rows and calls `enqueueRefreshesForStaleSections`, which enqueues only stale/missing sections. Text sections are gated on `speciesResolved` so they don't race an unresolved SPECIES_ID. `HISTORY_SUMMARY` is only enqueued when there's timeline source data (`hasHistorySummarySourceData`). **Never call OpenAI on the read path.** TTLs: `SPECIES_ID`/`SPECIES_DESCRIPTION`/`HEALTH_ASSESSMENT` effectively infinite; care sections + history summary 24h.
+- **Registration:** `PlantCommandService.registerPlant` calls `bioSectionInvalidator.enqueueRefresh(plantId, SPECIES_ID)` + `HEALTH_ASSESSMENT`. The legacy `PLANT_REGISTRATION_ANALYSIS` job is still enqueued during the transition so `latestAnalysis` stays populated as a fallback.
+- **API:** `PlantDetailResponse.bioSections` is a `Map<String, BioSectionDto>` keyed by section name. `PlantMapper.toBioSectionsMap(rows, legacyAnalysis)` always returns all 9 keys: real rows win, missing rows are backfilled from `latestAnalysis` so old plants keep rendering during backfill. `BioSectionDto.isRefreshing` is computed from `status ∈ {PENDING, PROCESSING}` or `generated_at == null` or TTL-expired — the frontend polls while any section is refreshing.
+- **List view:** `PlantMapper.toListItemResponse` accepts the `SPECIES_DESCRIPTION` row and prefers its `overview` for `speciesOverview`, falling back to `latestAnalysis` (screensaver benefits automatically).
+- **Deprecated:** `PlantJobMessage.JobType.PLACEMENT_NOTES_SUMMARY` + `PlacementNotesSummaryProcessor` are `@Deprecated(forRemoval=true)` — superseded by `PLACEMENT_CARE`. Still wired for one release so `plants.placement_notes_summary` stays populated for older clients.
 
 ## Architectural Rules
 1. **Async-first is the default.** User-facing requests must never block on LLM or image generation work.
@@ -26,17 +48,19 @@ Java 21, Spring Boot, Maven, Spring Web, Spring Data JPA, PostgreSQL, AWS S3 (pr
 ```
 com.planted.
   controller/    # thin, delegates to services
-  service/       # PlantCommandService, PlantQueryService, PlantReminderService
-  worker/        # PlantJobWorker, processors
-  client/        # OpenAiPlantClient, OpenAiImageGenerationClient
-  repository/    # one JpaRepository per entity
-  entity/        # Plant, PlantImage, PlantAnalysis, events, PlantReminderState, UserPhysicalAddress
-  dto/           # explicit request/response records
+  service/       # PlantCommandService, PlantQueryService, PlantReminderService, BioSectionInvalidator
+  worker/        # PlantJobWorker, processors (incl. PlantBioSectionProcessor)
+  client/        # OpenAiPlantClient (generateBioSection), OpenAiImageGenerationClient
+  bio/           # PlantBioSectionStrategy, BioSectionContext, BioSectionSchemas, strategies/*
+  repository/    # one JpaRepository per entity (incl. PlantBioSectionRepository)
+  entity/        # Plant, PlantImage, PlantAnalysis, PlantBioSection, PlantBioSectionKey, events, PlantReminderState, UserPhysicalAddress
+  dto/           # explicit request/response records (incl. BioSectionDto)
   config/        # Spring profiles, beans
   storage/       # ImageStorageService + Local/S3 impls
   queue/         # PlantJobPublisher + Local/SQS impls
   mapper/        # entity ↔ DTO
   reminder/      # reminder computation logic
+  weather/       # GeocodingService, OpenMeteoGeocodingClient, GeoCoordinates
 ```
 
 ## PlantListItemResponse Contract
@@ -64,6 +88,10 @@ Recompute `PlantReminderState` whenever:
 - **`OutdoorReminderRefreshScheduler`** (cron) for active **outdoor** plants with lat/lon — enqueues `PLANT_REMINDER_RECOMPUTE` so weather-informed copy can refresh without a care event
 
 Outdoor recomputes may call **`WeatherService`** (Open-Meteo by default); disable with `planted.weather.enabled=false`. Persisted fields include optional **`weather_care_note`** on `plant_reminder_state`.
+
+## Reminder attention flags (plant list + screensaver icons)
+
+`plant_reminder_state` also carries three LLM-authored attention booleans and matching reason strings: `health_attention_needed` / `health_attention_reason`, `light_attention_needed` / `light_attention_reason`, `placement_attention_needed` / `placement_attention_reason`. These are denormalised from the corresponding bio sections (`HEALTH_ASSESSMENT`, `LIGHT_CARE`, `PLACEMENT_CARE`) — each prompt returns `attentionNeeded` + `attentionReason` alongside its normal content (see `BioSectionSchemas`). **`PlantReminderService.syncBioAttention(plantId)`** is the single writer: it is invoked from (1) the tail of `PlantBioSectionProcessor.process` when one of those three sections completes successfully, and (2) the end of `recomputeReminderState`. Do not copy these flags elsewhere — the list/screensaver `ReminderIconRow` reads them via `ReminderStateDto`. The legacy `goal_attention_needed` column is kept for backward compatibility only; nothing reads or writes it any more, and it is no longer exposed on `ReminderStateDto`.
 
 ## Prompt Storage Rules
 - Prompt body stored as `TEXT`, never `VARCHAR(n)`

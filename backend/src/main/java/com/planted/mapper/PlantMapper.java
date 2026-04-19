@@ -11,7 +11,9 @@ import org.springframework.stereotype.Component;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Component
@@ -41,10 +43,14 @@ public class PlantMapper {
                 state.isFertilizerDue(),
                 state.isPruningDue(),
                 state.isHealthAttentionNeeded(),
-                state.isGoalAttentionNeeded(),
+                state.isLightAttentionNeeded(),
+                state.isPlacementAttentionNeeded(),
                 state.getNextWateringInstruction(),
                 state.getNextFertilizerInstruction(),
                 state.getNextPruningInstruction(),
+                state.getHealthAttentionReason(),
+                state.getLightAttentionReason(),
+                state.getPlacementAttentionReason(),
                 state.getWeatherCareNote(),
                 state.getLastComputedAt()
         );
@@ -159,7 +165,8 @@ public class PlantMapper {
             PlantImage illustratedImage,
             PlantImage originalImage,
             PlantReminderState reminderState,
-            String analysisStatus) {
+            PlantAnalysis registrationAnalysis,
+            PlantBioSection speciesDescriptionSection) {
 
         String taxonFallback = TaxonomicDisplayFormatter.formatLine(
                 plant.getTaxonomicFamily(), plant.getGenus(), plant.getSpecies(), plant.getVariety());
@@ -170,6 +177,15 @@ public class PlantMapper {
                 ? plant.getName()
                 : plant.getSpeciesLabel() != null ? plant.getSpeciesLabel()
                 : taxonFallback != null ? taxonFallback : "Unknown Plant";
+
+        String analysisStatus = registrationAnalysis != null
+                ? registrationAnalysis.getStatus().name()
+                : null;
+        String scientificName = registrationAnalysis != null
+                ? registrationAnalysis.getScientificName()
+                : null;
+        String speciesOverview = resolveSpeciesOverviewFromBioOrLegacy(
+                speciesDescriptionSection, registrationAnalysis);
 
         return new PlantListItemResponse(
                 plant.getId(),
@@ -182,8 +198,41 @@ public class PlantMapper {
                 toImageDto(originalImage),
                 toReminderStateDto(reminderState),
                 plant.getStatus().name(),
-                analysisStatus
+                analysisStatus,
+                scientificName,
+                speciesOverview
         );
+    }
+
+    /**
+     * Overload retained for callers that haven't been updated to pass the
+     * {@link PlantBioSection} row. Equivalent to calling the main method with
+     * {@code speciesDescriptionSection = null}, which falls back to the legacy
+     * analysis.
+     */
+    public PlantListItemResponse toListItemResponse(
+            Plant plant,
+            PlantImage illustratedImage,
+            PlantImage originalImage,
+            PlantReminderState reminderState,
+            PlantAnalysis registrationAnalysis) {
+        return toListItemResponse(plant, illustratedImage, originalImage, reminderState,
+                registrationAnalysis, null);
+    }
+
+    /**
+     * Prefer the decomposed SPECIES_DESCRIPTION bio section; fall back to the legacy
+     * monolithic analysis so plants registered before the decomposition still render.
+     */
+    private static String resolveSpeciesOverviewFromBioOrLegacy(
+            PlantBioSection section, PlantAnalysis legacy) {
+        if (section != null && section.getContentJsonb() != null) {
+            Object overview = section.getContentJsonb().get("overview");
+            if (overview instanceof String s && !s.isBlank()) {
+                return s;
+            }
+        }
+        return resolveSpeciesOverview(legacy);
     }
 
     public PlantDetailResponse toDetailResponse(
@@ -193,6 +242,7 @@ public class PlantMapper {
             List<PlantImage> healthyReferenceImages,
             List<PlantImage> pruneUpdateImages,
             PlantAnalysis latestAnalysis,
+            List<PlantBioSection> bioSections,
             PlantReminderState reminderState,
             boolean hasActiveJobs,
             List<PlantHistoryEntryDto> historyEntries,
@@ -210,6 +260,7 @@ public class PlantMapper {
                 plant.getVariety(),
                 plant.getSpeciesLabel(),
                 plant.getLocation(),
+                plant.getPlacementNotesSummary(),
                 plant.getGoalsText(),
                 plant.getGeoCountry(),
                 plant.getGeoState(),
@@ -223,6 +274,7 @@ public class PlantMapper {
                 healthyReferenceImages.stream().map(this::toImageDto).toList(),
                 pruneUpdateImages.stream().map(this::toImageDto).toList(),
                 toAnalysisSummaryDto(latestAnalysis),
+                toBioSectionsMap(bioSections, latestAnalysis),
                 toReminderStateDto(reminderState),
                 hasActiveJobs,
                 historyEntries,
@@ -234,6 +286,133 @@ public class PlantMapper {
                 plant.getCreatedAt(),
                 plant.getUpdatedAt()
         );
+    }
+
+    /**
+     * Build the {@code bioSections} map, backfilling missing sections from {@code latestAnalysis}
+     * (the legacy monolithic analysis) so existing plants render correctly before the async
+     * refresh jobs have populated the cache table.
+     */
+    public Map<String, BioSectionDto> toBioSectionsMap(
+            List<PlantBioSection> bioSections,
+            PlantAnalysis legacyFallback) {
+        Map<String, BioSectionDto> out = new LinkedHashMap<>();
+        if (bioSections != null) {
+            for (PlantBioSection row : bioSections) {
+                if (row.getSectionKey() == null) continue;
+                out.put(row.getSectionKey().name(), toBioSectionDto(row));
+            }
+        }
+        for (PlantBioSectionKey key : PlantBioSectionKey.values()) {
+            out.computeIfAbsent(key.name(), k -> legacyFallbackSection(key, legacyFallback));
+        }
+        return out;
+    }
+
+    private BioSectionDto toBioSectionDto(PlantBioSection row) {
+        boolean refreshing = row.getStatus() == PlantBioSection.Status.PENDING
+                || row.getStatus() == PlantBioSection.Status.PROCESSING
+                || row.getGeneratedAt() == null
+                || row.getGeneratedAt().plus(row.getSectionKey().ttl()).isBefore(OffsetDateTime.now());
+        return new BioSectionDto(
+                row.getSectionKey().name(),
+                row.getStatus() != null ? row.getStatus().name() : "PENDING",
+                row.getContentJsonb(),
+                row.getPromptKey(),
+                row.getPromptVersion(),
+                row.getGeneratedAt(),
+                refreshing,
+                row.getLastError()
+        );
+    }
+
+    /** When a bio section has not been produced yet, mirror what's available in the legacy analysis so the UI has something to show. */
+    private BioSectionDto legacyFallbackSection(PlantBioSectionKey key, PlantAnalysis a) {
+        if (a == null) {
+            return new BioSectionDto(key.name(), "PENDING", null, null, null, null, true, null);
+        }
+        Map<String, Object> content = switch (key) {
+            case SPECIES_ID -> legacySpeciesId(a);
+            case HEALTH_ASSESSMENT -> legacyHealthAssessment(a);
+            case SPECIES_DESCRIPTION -> legacySpeciesDescription(a);
+            case WATER_CARE -> legacyWaterCare(a);
+            case FERTILIZER_CARE -> legacyFertilizerCare(a);
+            case PRUNING_CARE -> legacyPruningCare(a);
+            case LIGHT_CARE -> legacyLightCare(a);
+            case PLACEMENT_CARE -> legacyPlacementCare(a);
+            case HISTORY_SUMMARY -> null;
+        };
+        if (content == null || content.values().stream().allMatch(v -> v == null || (v instanceof String s && s.isBlank()))) {
+            return new BioSectionDto(key.name(), "PENDING", null, null, null, null, true, null);
+        }
+        return new BioSectionDto(key.name(), "COMPLETED", content, "legacy:plant_registration_analysis_v1",
+                null, a.getCompletedAt(), true, null);
+    }
+
+    private static Map<String, Object> legacySpeciesId(PlantAnalysis a) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("className", a.getClassName());
+        m.put("taxonomicFamily", a.getTaxonomicFamily());
+        m.put("genus", a.getGenus());
+        m.put("species", a.getSpecies());
+        m.put("variety", a.getVariety());
+        m.put("confidence", a.getConfidence());
+        m.put("nativeRegions", a.getNativeRegionsJson());
+        return m;
+    }
+
+    private static Map<String, Object> legacyHealthAssessment(PlantAnalysis a) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("diagnosis", a.getHealthDiagnosis());
+        m.put("severity", null);
+        m.put("signs", List.of());
+        m.put("checks", List.of());
+        return m;
+    }
+
+    private static Map<String, Object> legacySpeciesDescription(PlantAnalysis a) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("overview", resolveSpeciesOverview(a));
+        m.put("uses", a.getUsesJson() != null ? a.getUsesJson() : List.of());
+        return m;
+    }
+
+    private static Map<String, Object> legacyWaterCare(PlantAnalysis a) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("amount", a.getWateringAmount());
+        m.put("frequency", a.getWateringFrequency());
+        m.put("guidance", a.getWateringGuidance());
+        return m;
+    }
+
+    private static Map<String, Object> legacyFertilizerCare(PlantAnalysis a) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("type", a.getFertilizerType());
+        m.put("frequency", a.getFertilizerFrequency());
+        m.put("guidance", a.getFertilizerGuidance());
+        return m;
+    }
+
+    private static Map<String, Object> legacyPruningCare(PlantAnalysis a) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("actionSummary", a.getPruningActionSummary());
+        m.put("guidance", a.getPruningGuidance());
+        m.put("generalGuidance", a.getPruningGeneralGuidance());
+        return m;
+    }
+
+    private static Map<String, Object> legacyLightCare(PlantAnalysis a) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("needs", a.getLightNeeds());
+        m.put("generalGuidance", a.getLightGeneralGuidance());
+        return m;
+    }
+
+    private static Map<String, Object> legacyPlacementCare(PlantAnalysis a) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("guidance", a.getPlacementGuidance());
+        m.put("generalGuidance", a.getPlacementGeneralGuidance());
+        return m;
     }
 
     /**

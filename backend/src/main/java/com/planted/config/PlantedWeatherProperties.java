@@ -12,6 +12,8 @@ public class PlantedWeatherProperties {
 
     private String openMeteoForecastUrl = "https://api.open-meteo.com/v1/forecast";
 
+    private String openMeteoGeocodingUrl = "https://geocoding-api.open-meteo.com/v1/search";
+
     /** In-memory cache TTL for identical (rounded) coordinates. */
     private int cacheTtlMinutes = 60;
 

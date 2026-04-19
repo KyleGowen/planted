@@ -17,6 +17,7 @@ import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Slf4j
@@ -31,6 +32,7 @@ public class PlantReminderService {
     private final PlantWateringEventRepository wateringEventRepository;
     private final PlantFertilizerEventRepository fertilizerEventRepository;
     private final PlantPruneEventRepository pruneEventRepository;
+    private final PlantBioSectionRepository bioSectionRepository;
     private final PlantMapper plantMapper;
     private final WeatherService weatherService;
     private final PlantedWeatherProperties weatherProperties;
@@ -148,6 +150,13 @@ public class PlantReminderService {
                 wateringDue = true;
                 nextWateringInstruction = "No watering history recorded. Check if watering is needed.";
             }
+            // Fallback: frequency missing but prose guidance exists — show guidance so the row still appears.
+            if (nextWateringInstruction == null) {
+                String wateringProse = firstNonBlank(analysis.getWateringGuidance(), null, null);
+                if (wateringProse != null) {
+                    nextWateringInstruction = wateringProse;
+                }
+            }
 
             // Fertilizer due check (simple: every ~30 days if frequency present)
             String fertFrequency = analysis.getFertilizerFrequency();
@@ -172,6 +181,13 @@ public class PlantReminderService {
                 nextFertilizerInstruction = "No fertilizer history. Apply " +
                         (analysis.getFertilizerType() != null ? analysis.getFertilizerType() : "balanced") +
                         " fertilizer if it's the growing season.";
+            }
+            // Fallback: frequency missing but prose guidance exists — show guidance so the row still appears.
+            if (nextFertilizerInstruction == null) {
+                String fertProse = firstNonBlank(analysis.getFertilizerGuidance(), null, null);
+                if (fertProse != null) {
+                    nextFertilizerInstruction = fertProse;
+                }
             }
 
             // Pruning: if there's guidance and no recent prune, flag as potentially due
@@ -229,9 +245,70 @@ public class PlantReminderService {
         state.setNextFertilizerInstruction(nextFertilizerInstruction);
         state.setNextPruningInstruction(nextPruningInstruction);
         state.setWeatherCareNote(weatherCareNote);
+        applyBioAttentionFlags(plantId, state);
 
         reminderStateRepository.save(state);
         log.info("Reminder state recomputed for plant {}", plantId);
+    }
+
+    /**
+     * Refresh the health / light / placement attention booleans (and reason strings) on
+     * {@link PlantReminderState} from the latest completed bio-section content. Invoked
+     * after a bio section completes so the plant-list + screensaver icon row can illuminate
+     * without the UI re-reading bio JSON. Safe to call for a plant that has no bio
+     * sections yet — flags stay at their current values (default false) when nothing is
+     * available, and an attention=false section always clears both the flag and the
+     * reason so a resolved issue doesn't leave a stale tooltip behind.
+     */
+    @Transactional
+    public void syncBioAttention(Long plantId) {
+        PlantReminderState state = reminderStateRepository.findByPlantId(plantId)
+                .orElse(PlantReminderState.builder().plantId(plantId).build());
+        applyBioAttentionFlags(plantId, state);
+        reminderStateRepository.save(state);
+    }
+
+    /**
+     * Reads the three attention-bearing bio sections and writes their flags/reasons onto the
+     * given (possibly transient) reminder-state row. Only COMPLETED sections with a
+     * non-null {@code contentJsonb} are consulted; anything else leaves the corresponding
+     * flag untouched at its current value. The rationale: during re-analysis, a section
+     * flips to PROCESSING and we want the prior flag to persist until the new answer
+     * arrives so the UI doesn't briefly un-illuminate.
+     */
+    private void applyBioAttentionFlags(Long plantId, PlantReminderState state) {
+        applyOne(plantId, PlantBioSectionKey.HEALTH_ASSESSMENT,
+                state::setHealthAttentionNeeded, state::setHealthAttentionReason);
+        applyOne(plantId, PlantBioSectionKey.LIGHT_CARE,
+                state::setLightAttentionNeeded, state::setLightAttentionReason);
+        applyOne(plantId, PlantBioSectionKey.PLACEMENT_CARE,
+                state::setPlacementAttentionNeeded, state::setPlacementAttentionReason);
+    }
+
+    private void applyOne(Long plantId,
+                          PlantBioSectionKey key,
+                          java.util.function.Consumer<Boolean> flagSetter,
+                          java.util.function.Consumer<String> reasonSetter) {
+        PlantBioSection row = bioSectionRepository
+                .findByPlantIdAndSectionKey(plantId, key)
+                .orElse(null);
+        if (row == null
+                || row.getStatus() != PlantBioSection.Status.COMPLETED
+                || row.getContentJsonb() == null) {
+            return;
+        }
+        Map<String, Object> content = row.getContentJsonb();
+        Object attentionNeeded = content.get("attentionNeeded");
+        Object attentionReason = content.get("attentionReason");
+        boolean flag = attentionNeeded instanceof Boolean b && b;
+        flagSetter.accept(flag);
+        reasonSetter.accept(flag ? asReasonString(attentionReason) : null);
+    }
+
+    private static String asReasonString(Object o) {
+        if (o == null) return null;
+        String s = o.toString().trim();
+        return s.isEmpty() ? null : s;
     }
 
     private String buildWeatherCareNote(WeatherSnapshot s) {

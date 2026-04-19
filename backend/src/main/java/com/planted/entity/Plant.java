@@ -31,6 +31,10 @@ public class Plant {
     @Column(name = "location")
     private String location;
 
+    /** One-sentence LLM paraphrase of {@link #location} shown under Indoor/Outdoor in the UI. */
+    @Column(name = "placement_notes_summary", columnDefinition = "TEXT")
+    private String placementNotesSummary;
+
     @Column(name = "geo_country")
     private String geoCountry;
 

@@ -36,6 +36,13 @@ public class PlantReminderState {
     @Column(name = "health_attention_needed", nullable = false)
     private boolean healthAttentionNeeded = false;
 
+    @Column(name = "light_attention_needed", nullable = false)
+    private boolean lightAttentionNeeded = false;
+
+    @Column(name = "placement_attention_needed", nullable = false)
+    private boolean placementAttentionNeeded = false;
+
+    /** Unused — see goal_attention_needed column kept for backward compat only; nothing reads/writes this anymore. */
     @Column(name = "goal_attention_needed", nullable = false)
     private boolean goalAttentionNeeded = false;
 
@@ -47,6 +54,18 @@ public class PlantReminderState {
 
     @Column(name = "next_pruning_instruction", columnDefinition = "TEXT")
     private String nextPruningInstruction;
+
+    /** Short LLM-authored reason surfaced as tooltip/aria on the health icon when {@link #healthAttentionNeeded} is true. */
+    @Column(name = "health_attention_reason", columnDefinition = "TEXT")
+    private String healthAttentionReason;
+
+    /** Short LLM-authored reason surfaced as tooltip/aria on the light icon when {@link #lightAttentionNeeded} is true. */
+    @Column(name = "light_attention_reason", columnDefinition = "TEXT")
+    private String lightAttentionReason;
+
+    /** Short LLM-authored reason surfaced as tooltip/aria on the placement icon when {@link #placementAttentionNeeded} is true. */
+    @Column(name = "placement_attention_reason", columnDefinition = "TEXT")
+    private String placementAttentionReason;
 
     /** Short outdoor conditions summary from weather API (rain, heat); null for indoor or when unavailable. */
     @Column(name = "weather_care_note", columnDefinition = "TEXT")

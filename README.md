@@ -40,14 +40,24 @@ Every slow operation — LLM plant analysis, illustrated image generation, remin
 ```
 POST /api/plants  →  202 Accepted immediately
                          │
-                         ├── [Worker] PLANT_REGISTRATION_ANALYSIS
+                         ├── [Worker] PLANT_BIO_SECTION_REFRESH  (SPECIES_ID, vision)
                          │         └─ OpenAI Responses API (image + structured output)
-                         │         └─ Writes taxonomy (family + genus + epithet + variety), derived species heading, care fields + JSONB
-                         │         └─ Enqueues PLANT_REMINDER_RECOMPUTE
+                         │         └─ Writes species_name / taxonomy onto plants + plant_bio_sections
+                         │         └─ On species change: cascade-invalidates + enqueues
+                         │            WATER/FERTILIZER/PRUNING/LIGHT/PLACEMENT/SPECIES_DESCRIPTION/HISTORY_SUMMARY
+                         │
+                         ├── [Worker] PLANT_BIO_SECTION_REFRESH  (HEALTH_ASSESSMENT, vision)
+                         │
+                         ├── [Worker] PLANT_REGISTRATION_ANALYSIS  (legacy fallback, kept during transition)
+                         │         └─ Populates latestAnalysis so old clients / unbackfilled reads keep working
                          │
                          └── [Worker] PLANT_ILLUSTRATION_GENERATION
                                    └─ DALL-E 3 (botanical illustration)
                                    └─ Stores PNG, links to plant record
+
+GET /api/plants/{id} → serve from plant_bio_sections cache;
+                       enqueue PLANT_BIO_SECTION_REFRESH for stale/missing sections
+                       (never call OpenAI on the read path)
 ```
 
 ---
@@ -126,12 +136,14 @@ If you intend **code only** with no doc/context pass, say so explicitly (e.g. �
 The plant detail page is a fixed-height, no-scroll landscape layout designed for web app use. It fills the full viewport (`100dvh`) with two columns:
 
 - **Left column (34%):** Hero photo (fills available height) → Reference + Photo history thumbnails only.
-- **Right column (flex-1):** Name/species/location header → PlantStatusCard → compact **growing** line (indoor/outdoor, optional snippet from placement notes when indoor, coords hints, optional `weatherCareNote`) → species + Care panels side-by-side (both scroll internally, bottoms align with thumbnail row). The **History** block in About can show **per-day LLM digests** (`historyDailyDigests` from the latest completed summary job) when present; otherwise it falls back to mingling structured `historyEntries` with legacy parsed summary text. **Refresh summary** re-runs the async history job (requires `OPENAI_API_KEY`). The **Care** panel ends with a compact **observation** box (text note, optional photo with caption) so journal-style entries still land in `historyEntries` and appear in that History section; propagation tips are not shown in About.
+- **Right column (flex-1):** Name/species/location header → PlantStatusCard → compact **growing** line (indoor/outdoor, optional snippet from placement notes when indoor, coords hints, optional `weatherCareNote`) → species + Care panels side-by-side (both scroll internally, bottoms align with thumbnail row). The **History** block in About can show **per-day LLM digests** (`historyDailyDigests` from the latest completed summary job) when present; otherwise it falls back to mingling structured `historyEntries` with legacy parsed summary text. **Refresh summary** re-runs the async history job (requires `OPENAI_API_KEY`). The **Care** panel ends with a compact **observation** box (text note, optional photo with caption). Text-only notes go to `addHistoryNote`; submitting a **photo** calls `uploadPlantPhoto` → **`POST /api/plants/{id}/photos`**, which promotes it to the hero/main image, pushes the previous photo into the left-column Photo history strip, auto-records a history entry ("Added a new photo[: caption]"), and refreshes the `HEALTH_ASSESSMENT` bio section against the new photo. Propagation tips are not shown in About.
 
 The back link (`← All plants`) is absolutely positioned so it doesn't consume layout space.
 
 ### Plant List Page
 Each list card thumbnail uses: `illustratedImage` → `originalImage` (user's own upload) → Sprout placeholder. Internet-sourced reference images (`HEALTHY_REFERENCE`) are never used as list thumbnails — the list shows only the user's personal photos.
+
+The **`ReminderIconRow`** underneath each card (and on the `/screensaver` tiles) always renders six fixed icons — **water, fertilizer, pruning, light, placement, health** — and illuminates the ones that need attention. Water/fertilizer/pruning are driven by scheduled care events (`wateringDue|wateringOverdue`, `fertilizerDue`, `pruningDue`); **light, placement, and health** are driven by LLM-authored booleans on each bio section: `LIGHT_CARE.attentionNeeded`, `PLACEMENT_CARE.attentionNeeded`, and `HEALTH_ASSESSMENT.attentionNeeded`, with accompanying short `attentionReason` strings used as tooltip/aria copy. `PlantReminderService.syncBioAttention` denormalises those three flags + reasons onto `plant_reminder_state` so the list stays a single fast read.
 
 **Your Location:** Optional home or growing-site address (`GET` / `PUT /api/user/location`, JSON `{ "address": "..." | null }`). Stored in `user_physical_addresses` keyed by `planted.user.default-id` until real auth exists; new plants get the same `user_id` on registration. When set, registration, reanalysis, pruning, and history-summary prompts include it as regional climate context only (no live weather APIs).
 
@@ -193,7 +205,8 @@ The recompute logic in `PlantReminderService`:
 3. Computes days elapsed vs frequency → sets `wateringDue`, `fertilizerDue`, `pruningDue`
 4. For **outdoor** plants with coordinates, fetches a compact **Open-Meteo** snapshot (worker only — never on the HTTP thread), adjusts instruction copy, sets optional `weather_care_note`, and may conservatively clear `wateringDue` when heavy recent rain applies **and** the plant is not already overdue. If weather is disabled or the API fails, logic falls back to the non-weather instructions.
 5. Generates plain-language next-step instructions (pruning line prefers `pruning_action_summary`, then legacy `pruning_guidance`, then `pruning_general_guidance`)
-6. Upserts `PlantReminderState`
+6. Calls `syncBioAttention` to copy `attentionNeeded` / `attentionReason` from the `LIGHT_CARE`, `PLACEMENT_CARE`, and `HEALTH_ASSESSMENT` bio sections onto `plant_reminder_state.{light,placement,health}_attention_needed` + `*_attention_reason` (same sync is also run at the tail of `PlantBioSectionProcessor` after each of those sections completes)
+7. Upserts `PlantReminderState`
 
 **Privacy / coordinates:** Outdoor weather needs approximate **lat/lon** stored on the plant. They are used only for public weather data (default provider: Open-Meteo, no key). Users can enter rounded coordinates if they want less precision.
 
@@ -245,7 +258,13 @@ For local dev, the `LocalPlantJobPublisher` publishes Spring `ApplicationEvent`s
 Prompts are versioned in the `llm_prompts` table (seeded by `V6__create_llm_prompts.sql`). Every OpenAI call is audited in `llm_requests` with the rendered prompt and response — enabling full debuggability and future prompt iteration without losing history.
 
 Prompt keys:
-- `plant_registration_analysis_v1` — species ID + care guidance (versioned in DB; structured JSON includes **`taxonomicFamily`** plus genus and specific epithet, layered light/placement/pruning fields, with `pruningActionSummary` requiring when and how much for the individual plant). The worker composes the persisted species heading as **Family Genus epithet variety** (blanks omitted). Owner free-text on `plants.location` is rendered as **placement notes** in the user prompt (context for `placementGuidance` / `placementGeneralGuidance`; current version instructs the model to synthesize and not quote that text verbatim). When the user has saved a home/growing-site address (`user_physical_addresses`), the rendered registration user prompt includes it as climate context (typical regional seasons only—not live weather).
+- `plant_registration_analysis_v1` — **legacy** monolithic species ID + care guidance. Still populated during the transition so `latestAnalysis` remains a fallback for older plants. New plant content should be added as a bio-section prompt (below), not here.
+- **Decomposed bio sections** (`V38__plant_bio_sections.sql` + `V39__bio_section_prompts_v1.sql`): cached in `plant_bio_sections` keyed by `(plant_id, section_key)`. Only the first two are vision; the rest are text-only to keep cost down. The read path serves from cache and lazy-enqueues `PLANT_BIO_SECTION_REFRESH` jobs; `SPECIES_ID` results cascade-invalidate every species-dependent section when the resolved species changes. Invalidation sites live in `BioSectionInvalidator` (growing/placement/journal/reanalysis).
+  - `plant_species_id_v1` (vision) — identity / taxonomy
+  - `plant_health_assessment_v1` (vision) — current condition from the photo
+  - `plant_species_description_v1` — encyclopedia-style `overview`
+  - `plant_water_care_v1`, `plant_fertilizer_care_v1`, `plant_pruning_care_v1`, `plant_light_care_v1`, `plant_placement_care_v1` — structured care guidance per topic
+  - `plant_history_summary_bio_v1` — compact history prose for the About pane
 - `plant_info_panel_v1` — species facts, history, uses
 - `plant_reminder_recompute_v1` — care scheduling
 - `pruning_analysis_v1` — conservative pruning guidance from photos
@@ -255,7 +274,7 @@ Prompt keys:
 
 ## Database Schema
 
-Versioned SQL migrations live in `backend/src/main/resources/db/migration/` (`V__*.sql`). Flyway applies them on startup. See that directory for the current set (plants, images, analyses—including paired care guidance columns on `plant_analyses`, **`taxonomic_family`** on plants and analyses, events, reminders, LLM audit, history, species overview, history summary, **`user_physical_addresses`**, etc.).
+Versioned SQL migrations live in `backend/src/main/resources/db/migration/` (`V__*.sql`). Flyway applies them on startup. See that directory for the current set (plants, images, analyses—including paired care guidance columns on `plant_analyses`, **`taxonomic_family`** on plants and analyses, events, reminders, LLM audit, history, species overview, history summary, **`user_physical_addresses`**, **`plant_bio_sections`** per-section prompt cache, etc.).
 
 ---
 
@@ -266,11 +285,12 @@ planted/
 ├── backend/
 │   └── src/main/java/com/planted/
 │       ├── controller/     # PlantController, ReminderController, UserLocationController
-│       ├── service/        # PlantCommandService, PlantQueryService, PlantReminderService
-│       ├── worker/         # PlantJobWorker + processors
-│       ├── client/         # OpenAiPlantClient, OpenAiImageGenerationClient
-│       ├── repository/     # Spring Data JPA repositories
-│       ├── entity/         # JPA entities
+│       ├── service/        # PlantCommandService, PlantQueryService, PlantReminderService, BioSectionInvalidator
+│       ├── worker/         # PlantJobWorker + processors (incl. PlantBioSectionProcessor)
+│       ├── client/         # OpenAiPlantClient (generateBioSection), OpenAiImageGenerationClient
+│       ├── bio/            # PlantBioSectionStrategy + strategies/* + BioSectionSchemas
+│       ├── repository/     # Spring Data JPA repositories (incl. PlantBioSectionRepository)
+│       ├── entity/         # JPA entities (incl. PlantBioSection, PlantBioSectionKey)
 │       ├── dto/            # Request/response records
 │       ├── storage/        # ImageStorageService + impls
 │       ├── queue/          # PlantJobPublisher + impls

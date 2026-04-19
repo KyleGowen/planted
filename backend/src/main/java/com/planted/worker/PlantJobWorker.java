@@ -23,12 +23,19 @@ public class PlantJobWorker {
     private final PlantReminderRecomputeProcessor reminderRecomputeProcessor;
     private final HealthyReferenceImageProcessor healthyReferenceImageProcessor;
     private final PlantHistorySummaryProcessor historySummaryProcessor;
+    /** @deprecated kept for one release; see {@link PlacementNotesSummaryProcessor}. */
+    @Deprecated(forRemoval = true)
+    @SuppressWarnings("deprecation")
+    private final PlacementNotesSummaryProcessor placementNotesSummaryProcessor;
+    private final PlantBioSectionProcessor bioSectionProcessor;
 
     /**
      * Core dispatch method — routes to the correct processor.
      */
+    @SuppressWarnings("deprecation")
     public void process(PlantJobMessage message) {
-        log.info("Processing job: {} for plantId={}", message.getJobType(), message.getPlantId());
+        log.info("Processing job: {} for plantId={} sectionKey={}",
+                message.getJobType(), message.getPlantId(), message.getSectionKey());
         try {
             switch (message.getJobType()) {
                 case PLANT_REGISTRATION_ANALYSIS, PLANT_REANALYSIS ->
@@ -43,6 +50,10 @@ public class PlantJobWorker {
                         healthyReferenceImageProcessor.process(message);
                 case PLANT_HISTORY_SUMMARY ->
                         historySummaryProcessor.process(message);
+                case PLACEMENT_NOTES_SUMMARY ->
+                        placementNotesSummaryProcessor.process(message);
+                case PLANT_BIO_SECTION_REFRESH ->
+                        bioSectionProcessor.process(message);
                 default ->
                         log.warn("Unknown job type: {}", message.getJobType());
             }

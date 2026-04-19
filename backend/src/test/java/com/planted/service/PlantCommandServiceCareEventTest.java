@@ -8,6 +8,7 @@ import com.planted.entity.PlantStatus;
 import com.planted.queue.PlantJobPublisher;
 import com.planted.repository.*;
 import com.planted.storage.ImageStorageService;
+import com.planted.weather.GeocodingService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -45,6 +46,8 @@ class PlantCommandServiceCareEventTest {
     private PlantJobPublisher jobPublisher;
     @Mock
     private PlantReminderService plantReminderService;
+    @Mock
+    private GeocodingService geocodingService;
 
     @InjectMocks
     private PlantCommandService plantCommandService;

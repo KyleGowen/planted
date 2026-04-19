@@ -23,6 +23,7 @@ Own system-level design, execution order, and cross-functional coordination. Bre
 3. **Frontend must never invent backend business logic.**
 4. **Async-first must survive every feature.** For any new feature: does this block the user waiting on LLM/image generation? If yes, redesign as a queued job or precomputed state.
 5. **Optimize list-page speed.** Any repeated or expensive logic for list rendering must be precomputed or persisted — especially reminder state and warning indicators.
+6. **Decomposed bio-section prompts are the default for plant content.** New plant-facing content fields should be added as an additional `PlantBioSectionKey` + strategy + prompt rather than bolted onto the legacy monolithic `plant_registration_analysis_v1`. Cached in `plant_bio_sections` with a single chokepoint for invalidation (`BioSectionInvalidator`) and a species-change cascade. Only `SPECIES_ID` and `HEALTH_ASSESSMENT` are allowed to consume the photo (vision); everything else is text-only to keep token spend in check.
 
 ## Ship and LAN documentation
 When shipping features that affect how developers run the stack (ports, env, proxies, CORS, or home-network access), ensure **repo [README.md](README.md)**, **[frontend/README.md](frontend/README.md)**, and **[frontend/AGENTS.md](frontend/AGENTS.md)** stay accurate, and complete **[scripts/ship-checklist.md](scripts/ship-checklist.md)** per **[.cursor/rules/ship.mdc](.cursor/rules/ship.mdc)**.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Upload, ImagePlus, ArrowLeft } from "lucide-react";
@@ -26,8 +26,7 @@ export default function UploadPage() {
   const [geoState, setGeoState] = useState("");
   const [geoCountry, setGeoCountry] = useState("");
   const [growingContext, setGrowingContext] = useState<PlantGrowingContext>("INDOOR");
-  const [latitude, setLatitude] = useState("");
-  const [longitude, setLongitude] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -43,10 +42,6 @@ export default function UploadPage() {
       if (geoState) formData.append("geoState", geoState);
       if (geoCity) formData.append("geoCity", geoCity);
       formData.append("growingContext", growingContext);
-      if (growingContext === "OUTDOOR") {
-        if (latitude.trim()) formData.append("latitude", latitude.trim());
-        if (longitude.trim()) formData.append("longitude", longitude.trim());
-      }
       return registerPlant(formData);
     },
     onSuccess: (data) => {
@@ -55,14 +50,31 @@ export default function UploadPage() {
     },
   });
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  function acceptImageFile(file: File | null | undefined) {
     if (!file) return;
+    if (!file.type.startsWith("image/")) return;
     setImageFile(file);
     const reader = new FileReader();
     reader.onload = (ev) => setImagePreview(ev.target?.result as string);
     reader.readAsDataURL(file);
   }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    acceptImageFile(e.target.files?.[0]);
+  }
+
+  useEffect(() => {
+    function onPaste(e: ClipboardEvent) {
+      const item = Array.from(e.clipboardData?.items ?? []).find((i) =>
+        i.type.startsWith("image/"),
+      );
+      if (!item) return;
+      const file = item.getAsFile();
+      if (file) acceptImageFile(file);
+    }
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, []);
 
   return (
     <main className="mx-auto max-w-lg px-4 py-8">
@@ -94,19 +106,44 @@ export default function UploadPage() {
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="relative w-full aspect-[4/3] rounded-xl border-2 border-dashed border-stone-200 bg-stone-50 flex flex-col items-center justify-center hover:border-stone-300 hover:bg-stone-100 transition-colors overflow-hidden"
+            onDragEnter={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsDragging(true);
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (!isDragging) setIsDragging(true);
+            }}
+            onDragLeave={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsDragging(false);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsDragging(false);
+              acceptImageFile(e.dataTransfer.files?.[0]);
+            }}
+            className={`relative w-full aspect-[4/3] rounded-xl border-2 border-dashed flex flex-col items-center justify-center transition-colors overflow-hidden ${
+              isDragging
+                ? "border-stone-400 bg-stone-100"
+                : "border-stone-200 bg-stone-50 hover:border-stone-300 hover:bg-stone-100"
+            }`}
           >
             {imagePreview ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={imagePreview}
                 alt="Preview"
-                className="absolute inset-0 w-full h-full object-cover rounded-xl"
+                className="absolute inset-0 w-full h-full object-cover rounded-xl pointer-events-none"
               />
             ) : (
               <>
                 <ImagePlus size={32} className="text-stone-300 mb-2" />
-                <p className="text-sm text-stone-400">Tap to select a photo</p>
+                <p className="text-sm text-stone-400">Tap, drop, or paste a photo</p>
                 <p className="text-xs text-stone-300 mt-0.5">JPG, PNG, WebP, HEIC</p>
               </>
             )}
@@ -166,8 +203,8 @@ export default function UploadPage() {
               Growing environment
             </Label>
             <p className="text-xs text-stone-400 mt-0.5 mb-2">
-              Outdoor plants can use local weather (rain, heat) in care reminders when you add coordinates below.
-              Approximate latitude/longitude are stored only for weather lookups.
+              Outdoor plants use local weather (rain, heat) in care reminders.
+              We&apos;ll derive the location from the city/state/country above &mdash; no coordinates required.
             </p>
             <select
               id="growingContext"
@@ -178,37 +215,10 @@ export default function UploadPage() {
               <option value="INDOOR">Indoor</option>
               <option value="OUTDOOR">Outdoor</option>
             </select>
-            {growingContext === "OUTDOOR" && (
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                <div>
-                  <Label htmlFor="latitude" className="text-xs text-stone-500">
-                    Latitude (optional)
-                  </Label>
-                  <Input
-                    id="latitude"
-                    type="text"
-                    inputMode="decimal"
-                    value={latitude}
-                    onChange={(e) => setLatitude(e.target.value)}
-                    placeholder="e.g. 40.7128"
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="longitude" className="text-xs text-stone-500">
-                    Longitude (optional)
-                  </Label>
-                  <Input
-                    id="longitude"
-                    type="text"
-                    inputMode="decimal"
-                    value={longitude}
-                    onChange={(e) => setLongitude(e.target.value)}
-                    placeholder="e.g. -74.0060"
-                    className="mt-1"
-                  />
-                </div>
-              </div>
+            {growingContext === "OUTDOOR" && !geoCity.trim() && (
+              <p className="mt-2 text-xs text-amber-700">
+                Add a city above so we can pull local weather for reminders.
+              </p>
             )}
           </div>
 
@@ -217,13 +227,13 @@ export default function UploadPage() {
               Initial Notes <span className="text-stone-300 font-normal">(optional)</span>
             </Label>
             <p className="text-xs text-stone-400 mt-0.5 mb-2">
-              Anything you add here is included when we run the first identification and care prompts.
+              Included when we run the first identification and care prompts. Feel free to add any species or origin hints you already know — e.g. common name, nursery label, where you bought or collected it.
             </p>
             <textarea
               id="initialNotes"
               value={goalsText}
               onChange={(e) => setGoalsText(e.target.value)}
-              placeholder="e.g. New purchase, some yellowing lower leaves, hoping it fills in on the right…"
+              placeholder="e.g. Labeled 'Raven ZZ' at the nursery, brought back from my mom's garden in Florida, hoping it fills in on the right…"
               className="mt-1.5 w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm text-stone-800 placeholder:text-stone-300 focus:outline-none focus:ring-1 focus:ring-stone-400 resize-none min-h-[80px]"
             />
           </div>

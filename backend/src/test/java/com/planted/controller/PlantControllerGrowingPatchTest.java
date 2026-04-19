@@ -32,7 +32,7 @@ class PlantControllerGrowingPatchTest {
     void updatePlantGrowing_returns204() throws Exception {
         mockMvc.perform(patch("/api/plants/5/growing")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"growingContext\":\"OUTDOOR\",\"latitude\":40.7,\"longitude\":-73.9}"))
+                        .content("{\"growingContext\":\"OUTDOOR\"}"))
                 .andExpect(status().isNoContent());
 
         verify(commandService).updatePlantGrowing(eq(5L), any(UpdatePlantGrowingRequest.class));

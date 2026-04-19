@@ -1,0 +1,52 @@
+---
+description: Keep docs/prompts/** in sync whenever prompts or their call sites change. Activates on Flyway prompt migrations, the OpenAI client, bio strategies, and the catalog itself.
+globs: backend/src/main/resources/db/migration/V*__*.sql, backend/src/main/java/com/planted/client/OpenAiPlantClient.java, backend/src/main/java/com/planted/client/OpenAiImageGenerationClient.java, backend/src/main/java/com/planted/bio/**/*.java, backend/src/main/java/com/planted/worker/Plant*Processor.java, backend/src/main/java/com/planted/worker/PlacementNotesSummaryProcessor.java, docs/prompts/**/*.md
+alwaysApply: false
+---
+
+# Prompt Catalog — keep docs/prompts/** current
+
+Planted ships a human-readable prompt catalog under [`docs/prompts/`](../../docs/prompts/README.md). It is the canonical reference for every LLM prompt the app sends. It is **not** runtime-consumed — the runtime still reads from the `llm_prompts` Postgres table seeded by Flyway migrations — but it must stay in sync with the running system so engineers, reviewers, and prompt-tuners can trust it.
+
+## When to update the catalog
+
+Update the matching markdown file **in the same change** that introduces any of these:
+
+1. **A Flyway migration under `backend/src/main/resources/db/migration/` that INSERTs or UPDATEs `llm_prompts`.** Update the active body in `docs/prompts/<area>/<prompt_key>.md`, bump _Version history_, and if the variable set changed, update _Input variables_ and the verbatim user template.
+2. **Any change to `OpenAiPlantClient.java`** (new method, new template variable, new schema field, renamed response_format name). Update _Used by_, _Input variables_, and _Output schema_ on every affected prompt.
+3. **A new or modified bio strategy under `backend/src/main/java/com/planted/bio/strategies/`.** Update the corresponding `docs/prompts/bio/*.md` — typically _Input variables_ and _Used by_.
+4. **A change to `BioSectionSchemas.java`.** Update _Output schema_ on every affected bio prompt.
+5. **A change to any `*Processor` under `backend/src/main/java/com/planted/worker/`** that affects which prompt is called, which inputs are built, or how the result is consumed. Update _Used by_.
+6. **A change to `OpenAiImageGenerationClient.java`.** Update [`docs/prompts/image/dalle_illustration.md`](../../docs/prompts/image/dalle_illustration.md).
+7. **Introducing a brand-new `prompt_key`.** Create a new `docs/prompts/<area>/<prompt_key>.md` by copying the shape of any existing file and add a row to the table in [`docs/prompts/README.md`](../../docs/prompts/README.md).
+8. **Deprecating / deactivating a prompt.** Move its doc to `docs/prompts/archive/` and explain when and why it was retired.
+
+## Standard per-prompt file layout
+
+All files under `docs/prompts/<area>/<prompt_key>.md` must have these sections, in this order:
+
+1. H1 with the `prompt_key` and a one-sentence purpose blockquote underneath.
+2. `## Summary` — "Asks for" bullet and "Returns" bullet.
+3. `## Used by` — markdown links to controllers/workers/services/strategies + UI surfaces.
+4. `## Input variables` — a table (`Variable | Required | Source | Example` or `| Variable | Required | Source |`). Variable names must match the keys the runtime actually passes to `renderUserPrompt`.
+5. `## Output schema` — `response_format` name, link to the schema builder, a fenced block listing top-level fields.
+6. `## System prompt (active version N)` — full verbatim body (fenced, no language tag).
+7. `## User template (active version N)` — full verbatim body with `{{placeholders}}` intact.
+8. `## Version history` — one row per migration touching this `prompt_key`.
+9. `## Notes` — anything else: deprecation, related prompts, edge cases.
+
+The verbatim bodies must match the **latest active** row in `llm_prompts` (as of the migrations in this commit), not a random older version.
+
+## Template rendering quick reference
+
+- `{{var_name}}` is literal substitution.
+- `{{#if var_name}}…{{/if}}` drops its block when the variable is blank. No nesting, no `else`, no helpers.
+- **Postgres dollar-quote gotcha:** a handlebars `{{var}}` must not sit directly after a Postgres dollar tag (`$tag$`) in a migration — Flyway parses `${...}` as a placeholder. Always separate with a newline.
+- The response-format JSON schema name is derived by stripping the trailing `_vNN` from the `prompt_key` and appending `_response` (see `OpenAiPlantClient.responseFormatSchemaName`). Use that exact name in the _Output schema_ section.
+
+## Quick self-check before committing
+
+- [ ] Did any prompt body, variable set, or call site change? If yes, the matching `docs/prompts/**/*.md` is updated in this same commit.
+- [ ] For any new migration, _Version history_ has a new row and the system/user prompts reflect the new body.
+- [ ] For any new `prompt_key`, the README index links to the new file.
+- [ ] For any deprecation, the doc moved to `archive/` with a "why retired" note.

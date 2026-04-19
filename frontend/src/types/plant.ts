@@ -21,11 +21,21 @@ export interface ReminderStateDto {
   wateringOverdue: boolean;
   fertilizerDue: boolean;
   pruningDue: boolean;
+  /** True when HEALTH_ASSESSMENT bio section reports severity MILD/MODERATE/SEVERE. */
   healthAttentionNeeded: boolean;
-  goalAttentionNeeded: boolean;
+  /** True when LIGHT_CARE bio section flags a light mismatch for this plant's placement. */
+  lightAttentionNeeded: boolean;
+  /** True when PLACEMENT_CARE bio section flags the plant as needing to be moved or repotted. */
+  placementAttentionNeeded: boolean;
   nextWateringInstruction: string | null;
   nextFertilizerInstruction: string | null;
   nextPruningInstruction: string | null;
+  /** Short tooltip-length reason from the HEALTH_ASSESSMENT bio section; null when healthAttentionNeeded is false. */
+  healthAttentionReason: string | null;
+  /** Short tooltip-length reason from the LIGHT_CARE bio section; null when lightAttentionNeeded is false. */
+  lightAttentionReason: string | null;
+  /** Short tooltip-length reason from the PLACEMENT_CARE bio section; null when placementAttentionNeeded is false. */
+  placementAttentionReason: string | null;
   /** Short outdoor weather context line from the reminder job (null for indoor or when weather is unavailable). */
   weatherCareNote: string | null;
   lastComputedAt: string;

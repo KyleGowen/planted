@@ -1198,7 +1198,7 @@ function CarePanel({
       value={placementPrimary}
       valueMuted={placementValueMuted}
       detail={placementDetail}
-      actionNeeded={false}
+      actionNeeded={Boolean(reminderState?.placementAttentionNeeded)}
       isOpen={expandedCareTopicId === "placement"}
       onToggle={() =>
         setExpandedCareTopicId((cur) => (cur === "placement" ? null : "placement"))
@@ -1401,7 +1401,7 @@ function CarePanel({
               icon={<Sun size={14} className="text-amber-400" />}
               label="Light"
               value={analysis.lightNeeds}
-              actionNeeded={false}
+              actionNeeded={Boolean(reminderState?.lightAttentionNeeded)}
               isOpen={expandedCareTopicId === "light"}
               onToggle={() =>
                 setExpandedCareTopicId((cur) => (cur === "light" ? null : "light"))

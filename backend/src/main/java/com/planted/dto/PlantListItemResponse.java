@@ -11,5 +11,7 @@ public record PlantListItemResponse(
         PlantImageDto originalImage,
         ReminderStateDto reminderState,
         String status,
-        String analysisStatus
+        String analysisStatus,
+        String scientificName,
+        String speciesOverview
 ) {}

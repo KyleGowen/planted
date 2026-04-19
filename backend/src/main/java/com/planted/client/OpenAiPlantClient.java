@@ -230,6 +230,73 @@ public class OpenAiPlantClient {
         }
     }
 
+    /**
+     * Compresses an owner's free-text placement notes into a single-sentence caption used
+     * as the third line under Indoor/Outdoor in the plant detail header. Dedicated,
+     * text-only LLM call (no image) with its own small JSON schema — independent of
+     * {@link #analyzeRegistration}. Returns an empty string when the notes are missing
+     * or unusable per the prompt contract.
+     *
+     * @param location the owner's raw placement notes (may be null/blank)
+     * @param plantId  for audit logging
+     */
+    public String summarizePlacementNotes(String location, Long plantId) {
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalStateException(
+                    "OpenAI is not configured: set planted.openai.api-key (or OPENAI_API_KEY) to summarize placement notes.");
+        }
+
+        String promptKey = "plant_placement_notes_summary_v1";
+        String systemPrompt = resolvePrompt(promptKey, "system");
+
+        Map<String, String> templateVars = new HashMap<>();
+        templateVars.put("location", Optional.ofNullable(location).orElse(""));
+        String userPrompt = renderUserPrompt(promptKey, templateVars);
+
+        Map<String, Object> inputVariables = new HashMap<>();
+        inputVariables.put("location", location);
+
+        Map<String, Object> requestBody = Map.of(
+                "model", model,
+                "messages", List.of(
+                        Map.of("role", "system", "content", systemPrompt),
+                        Map.of("role", "user", "content", userPrompt)
+                ),
+                "response_format", Map.of(
+                        "type", "json_schema",
+                        "json_schema", Map.of(
+                                "name", responseFormatSchemaName(promptKey),
+                                "schema", placementNotesSummarySchema(),
+                                "strict", true
+                        )
+                )
+        );
+
+        String renderedPrompt = systemPrompt + "\n\n" + userPrompt;
+        String responseText = callWithRetry(requestBody, promptKey);
+
+        LlmRequest auditRecord = LlmRequest.builder()
+                .promptKey(promptKey)
+                .model(model)
+                .renderedPrompt(renderedPrompt)
+                .inputVariables(new HashMap<>(inputVariables))
+                .responseText(responseText)
+                .plantId(plantId)
+                .build();
+        requestRepository.save(auditRecord);
+
+        try {
+            JsonNode root = objectMapper.readTree(responseText);
+            String outputText = extractOutputText(root);
+            JsonNode parsed = objectMapper.readTree(outputText);
+            String summary = parsed.path("summary").asText("");
+            return summary == null ? "" : summary.trim();
+        } catch (Exception e) {
+            log.error("Failed to parse placement notes summary response", e);
+            throw new RuntimeException("Failed to parse placement notes summary: " + e.getMessage(), e);
+        }
+    }
+
     private String callWithImage(
             String systemPrompt, String userPrompt,
             String imageBase64, String mimeType,
@@ -240,6 +307,91 @@ public class OpenAiPlantClient {
         return callWithImages(systemPrompt, userPrompt,
                 List.of(imageBase64), List.of(mimeType),
                 promptKey, inputVariables, plantId, analysisId, schema);
+    }
+
+    /**
+     * Generic entry point for decomposed bio-section calls. Resolves the given
+     * prompt key from {@code llm_prompts}, renders user variables, and calls
+     * OpenAI with the supplied JSON schema. When {@code imagesBase64} is empty
+     * this is a text-only call; otherwise it is a vision call. Returns the
+     * parsed JSON output of the model.
+     */
+    public JsonNode generateBioSection(
+            String promptKey,
+            Map<String, String> templateVars,
+            Map<String, Object> schema,
+            List<String> imagesBase64,
+            List<String> mimeTypes,
+            Long plantId) {
+
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalStateException(
+                    "OpenAI is not configured: set planted.openai.api-key (or OPENAI_API_KEY) to generate bio sections.");
+        }
+
+        String systemPrompt = resolvePrompt(promptKey, "system");
+        String userPrompt = renderUserPrompt(promptKey, templateVars == null ? Map.of() : templateVars);
+
+        Map<String, Object> inputVariables = new HashMap<>();
+        if (templateVars != null) inputVariables.putAll(templateVars);
+
+        String responseText;
+        List<String> imgs = imagesBase64 != null ? imagesBase64 : List.of();
+        List<String> mimes = mimeTypes != null ? mimeTypes : List.of();
+
+        if (imgs.isEmpty()) {
+            Map<String, Object> requestBody = Map.of(
+                    "model", model,
+                    "messages", List.of(
+                            Map.of("role", "system", "content", systemPrompt),
+                            Map.of("role", "user", "content", userPrompt)
+                    ),
+                    "response_format", Map.of(
+                            "type", "json_schema",
+                            "json_schema", Map.of(
+                                    "name", responseFormatSchemaName(promptKey),
+                                    "schema", schema,
+                                    "strict", true
+                            )
+                    )
+            );
+            String renderedPrompt = systemPrompt + "\n\n" + userPrompt;
+            responseText = callWithRetry(requestBody, promptKey);
+            LlmRequest auditRecord = LlmRequest.builder()
+                    .promptKey(promptKey)
+                    .model(model)
+                    .renderedPrompt(renderedPrompt)
+                    .inputVariables(new HashMap<>(inputVariables))
+                    .responseText(responseText)
+                    .plantId(plantId)
+                    .build();
+            requestRepository.save(auditRecord);
+        } else {
+            responseText = callWithImages(
+                    systemPrompt, userPrompt,
+                    imgs, mimes,
+                    promptKey, inputVariables, plantId, null, schema);
+        }
+
+        try {
+            JsonNode root = objectMapper.readTree(responseText);
+            String outputText = extractOutputText(root);
+            return objectMapper.readTree(outputText);
+        } catch (Exception e) {
+            log.error("Failed to parse bio section response for promptKey={}", promptKey, e);
+            throw new RuntimeException("Failed to parse bio section response: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Resolves the active version number for the given {@code promptKey} / {@code role}. Used to
+     * stamp bio-section cache rows so we can detect and refresh when prompts are rev'd.
+     */
+    public Integer resolveActivePromptVersion(String promptKey) {
+        return promptRepository
+                .findFirstByPromptKeyAndRoleAndIsActiveTrueOrderByVersionDesc(promptKey, "system")
+                .map(LlmPrompt::getVersion)
+                .orElse(null);
     }
 
     private String callWithImages(
@@ -497,6 +649,37 @@ public class OpenAiPlantClient {
                                 + "seasonality—do not repeat the same specific when/how-much plan from "
                                 + "pruningActionSummary. 'No pruning required' or minimal pruning is a valid theme."
                 ));
+            } else if (field.equals("healthDiagnosis")) {
+                properties.put(field, Map.of(
+                        "type", "string",
+                        "description",
+                        "Realistic assessment of THIS plant's visible condition. Do NOT default to 'healthy'. "
+                                + "Actively scan the image for chlorosis, necrosis, crispy edges, wilting, leaf "
+                                + "drop, curling, leggy/etiolated growth, pale color, sunburn, mechanical damage, "
+                                + "pests or webbing, powdery or sooty coatings, mold, soil crust, rot at base, and "
+                                + "pot/substrate issues. When signs are present, describe them concretely—which "
+                                + "leaves, which part of the leaf, and the pattern—in priority order. For each "
+                                + "finding you MUST explicitly consider and name whichever of these three "
+                                + "dominant houseplant stressors fit: (1) LIGHT LEVELS—too little (pale color, "
+                                + "leggy stretching, small new growth) vs too much or wrong quality (bleached "
+                                + "patches, sunburn, faded color on sun-side leaves); (2) WATERING, with "
+                                + "particular attention to OVERWATERING (uniformly yellow lower leaves, soft or "
+                                + "mushy stems, persistently wet or sour soil, fungus gnats, wilting despite wet "
+                                + "soil, black stem/crown rot) distinguished from underwatering cues when "
+                                + "visible; (3) PLACEMENT (heat vents, AC, cold drafts, leaf contact with cold "
+                                + "glass, low humidity, no airflow, saucer with standing water, pot too small "
+                                + "or too large, hidden behind a curtain). Offer 1–3 plausible causes per "
+                                + "finding and do not lock to a single cause; do not assume watering alone. "
+                                + "Close with 1–3 short owner-checkable prompts that target whichever of light, "
+                                + "watering, or placement is most plausible (e.g. 'Is the soil still wet 2 in "
+                                + "down?', 'How many hours of bright light does this spot get?', 'Is it near a "
+                                + "heat vent or cold window?'). Only call the plant healthy when there are "
+                                + "genuinely no visible concerns AND the image is clear enough to judge; when "
+                                + "the photo is blurry, cropped, or poorly lit, say the image is insufficient "
+                                + "for a confident health read rather than declaring health. Tone: honest and "
+                                + "specific, not alarmist; beginner-friendly. Do not turn this into a full care "
+                                + "plan — schedules belong in the dedicated watering / light / placement fields."
+                ));
             } else {
                 properties.put(field, Map.of("type", "string"));
             }
@@ -525,6 +708,22 @@ public class OpenAiPlantClient {
         schema.put("properties", properties);
         schema.put("required", List.of("pruningNeeded", "verdict", "pruningAmount",
                 "specificRecommendations", "goalAlignment", "confidence", "notes"));
+        schema.put("additionalProperties", false);
+        return schema;
+    }
+
+    private Map<String, Object> placementNotesSummarySchema() {
+        Map<String, Object> properties = new LinkedHashMap<>();
+        properties.put("summary", Map.of(
+                "type", "string",
+                "description",
+                "Single-sentence paraphrase of the owner's placement notes (<= ~120 characters). "
+                        + "Empty string when notes are missing or unusable."
+        ));
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("type", "object");
+        schema.put("properties", properties);
+        schema.put("required", List.of("summary"));
         schema.put("additionalProperties", false);
         return schema;
     }

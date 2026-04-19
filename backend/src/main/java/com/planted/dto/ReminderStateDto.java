@@ -8,10 +8,14 @@ public record ReminderStateDto(
         boolean fertilizerDue,
         boolean pruningDue,
         boolean healthAttentionNeeded,
-        boolean goalAttentionNeeded,
+        boolean lightAttentionNeeded,
+        boolean placementAttentionNeeded,
         String nextWateringInstruction,
         String nextFertilizerInstruction,
         String nextPruningInstruction,
+        String healthAttentionReason,
+        String lightAttentionReason,
+        String placementAttentionReason,
         String weatherCareNote,
         OffsetDateTime lastComputedAt
 ) {}
