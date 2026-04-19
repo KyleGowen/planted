@@ -8,7 +8,7 @@ import { Sprout, X } from "lucide-react";
 import { listPlants } from "@/lib/api";
 import type { PlantListItemResponse } from "@/types/plant";
 
-const DISPLAY_DURATION_MS = 30_000;
+const DISPLAY_DURATION_MS = 60_000;
 
 function shuffle<T>(arr: T[]): T[] {
   const copy = [...arr];
