@@ -18,6 +18,9 @@ export interface CareTopicAccordionProps {
   isOpen: boolean;
   onToggle: () => void;
   headerAccessory?: React.ReactNode;
+  /** When true, render a subtle "Updating…" hint next to the label — the section's
+   *  bio prompt is being refreshed in the background. */
+  refreshing?: boolean;
 }
 
 export function CareTopicAccordion({
@@ -31,6 +34,7 @@ export function CareTopicAccordion({
   isOpen,
   onToggle,
   headerAccessory,
+  refreshing,
 }: CareTopicAccordionProps) {
   const uid = useId();
   const panelId = `${uid}-panel`;
@@ -61,6 +65,11 @@ export function CareTopicAccordion({
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-medium uppercase tracking-wide text-stone-400">
                   {label}
+                  {refreshing ? (
+                    <span className="ml-1.5 normal-case tracking-normal text-[10px] text-stone-400 italic">
+                      Updating…
+                    </span>
+                  ) : null}
                 </span>
                 {actionNeeded ? (
                   <>
@@ -83,6 +92,11 @@ export function CareTopicAccordion({
             ) : (
               <span className="text-xs font-medium uppercase tracking-wide text-stone-400">
                 {label}
+                {refreshing ? (
+                  <span className="ml-1.5 normal-case tracking-normal text-[10px] text-stone-400 italic">
+                    Updating…
+                  </span>
+                ) : null}
               </span>
             )}
           </button>

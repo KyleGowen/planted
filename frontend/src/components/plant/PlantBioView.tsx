@@ -634,7 +634,11 @@ export function PlantBioView({
   );
 
   return (
-    <div className="flex flex-1 gap-4 min-h-0 pt-5">
+    <div
+      className={`flex flex-1 gap-4 min-h-0 ${
+        readOnly ? "py-8" : "pt-5"
+      }`}
+    >
 
       {/* ── Left column: hero + thumbs ─────────────────────────── */}
       <div className="flex flex-col gap-2 w-[34%] min-h-0">

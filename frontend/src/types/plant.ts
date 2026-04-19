@@ -78,6 +78,8 @@ export interface PlantListItemResponse {
   reminderState: ReminderStateDto | null;
   status: PlantStatus;
   analysisStatus: AnalysisStatus | null;
+  scientificName: string | null;
+  speciesOverview: string | null;
 }
 
 export interface PlantHistoryEntryDto {
@@ -95,6 +97,44 @@ export interface HistoryDailyDigestDto {
   digest: string;
 }
 
+/** Keys matching backend {@code PlantBioSectionKey} enum names. */
+export type BioSectionKey =
+  | "SPECIES_ID"
+  | "HEALTH_ASSESSMENT"
+  | "SPECIES_DESCRIPTION"
+  | "WATER_CARE"
+  | "FERTILIZER_CARE"
+  | "PRUNING_CARE"
+  | "LIGHT_CARE"
+  | "PLACEMENT_CARE"
+  | "HISTORY_SUMMARY";
+
+export type BioSectionStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+
+/**
+ * One cached bio section. Content shape depends on the section key:
+ * - SPECIES_ID: { className, taxonomicFamily, genus, species, variety, confidence, nativeRegions }
+ * - HEALTH_ASSESSMENT: { diagnosis, severity, signs[], checks[] }
+ * - SPECIES_DESCRIPTION: { overview, uses[] }
+ * - WATER_CARE: { amount, frequency, guidance }
+ * - FERTILIZER_CARE: { type, frequency, guidance }
+ * - PRUNING_CARE: { actionSummary, guidance, generalGuidance }
+ * - LIGHT_CARE: { needs, generalGuidance }
+ * - PLACEMENT_CARE: { guidance, generalGuidance }
+ * - HISTORY_SUMMARY: { summary }
+ */
+export interface BioSectionDto {
+  key: BioSectionKey;
+  status: BioSectionStatus;
+  content: Record<string, unknown> | null;
+  promptKey: string | null;
+  promptVersion: number | null;
+  generatedAt: string | null;
+  /** True when the section is stale or currently being regenerated. UI should keep polling. */
+  isRefreshing: boolean;
+  lastError: string | null;
+}
+
 export interface PlantDetailResponse {
   id: number;
   name: string | null;
@@ -103,6 +143,8 @@ export interface PlantDetailResponse {
   variety: string | null;
   speciesLabel: string | null;
   location: string | null;
+  /** One-sentence LLM paraphrase of {@link location}; null while the dedicated summary job runs or when notes are blank. */
+  placementNotesSummary: string | null;
   goalsText: string | null;
   geoCountry: string | null;
   geoState: string | null;
@@ -117,6 +159,12 @@ export interface PlantDetailResponse {
   healthyReferenceImages: PlantImageDto[];
   pruneUpdateImages: PlantImageDto[];
   latestAnalysis: AnalysisSummaryDto | null;
+  /**
+   * Decomposed per-section bio content keyed by {@link BioSectionKey}. Prefer this over
+   * {@code latestAnalysis}; the latter remains populated as a legacy fallback during
+   * the backfill window for plants registered before the decomposition.
+   */
+  bioSections?: Partial<Record<BioSectionKey, BioSectionDto>>;
   reminderState: ReminderStateDto | null;
   hasActiveJobs: boolean;
   historyEntries: PlantHistoryEntryDto[];
