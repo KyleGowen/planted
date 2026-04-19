@@ -6,6 +6,8 @@ import com.planted.queue.PlantJobMessage;
 import com.planted.queue.PlantJobPublisher;
 import com.planted.repository.*;
 import com.planted.storage.ImageStorageService;
+import com.planted.weather.GeoCoordinates;
+import com.planted.weather.GeocodingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,6 +39,8 @@ public class PlantCommandService {
     private final ImageStorageService imageStorageService;
     private final PlantJobPublisher jobPublisher;
     private final PlantReminderService plantReminderService;
+    private final GeocodingService geocodingService;
+    private final BioSectionInvalidator bioSectionInvalidator;
 
     @Value("${planted.user.default-id:default}")
     private String defaultUserId;
@@ -51,13 +55,21 @@ public class PlantCommandService {
             String geoCountry,
             String geoState,
             String geoCity,
-            PlantGrowingContext growingContext,
-            Double latitude,
-            Double longitude) {
+            PlantGrowingContext growingContext) {
 
         validateImageFile(imageFile);
 
         PlantGrowingContext ctx = growingContext != null ? growingContext : PlantGrowingContext.INDOOR;
+
+        Double latitude = null;
+        Double longitude = null;
+        if (ctx == PlantGrowingContext.OUTDOOR) {
+            GeoCoordinates coords = geocodingService.geocode(geoCity, geoState, geoCountry).orElse(null);
+            if (coords != null) {
+                latitude = coords.latitude();
+                longitude = coords.longitude();
+            }
+        }
 
         // Create plant record
         Plant plant = Plant.builder()
@@ -122,6 +134,13 @@ public class PlantCommandService {
         final Long analysisId = analysis.getId();
         final Long imageId = image.getId();
 
+        // Kick off the two vision calls in parallel. Text-only sections (description,
+        // water/fertilizer/pruning/light/placement care, history) fan out from the
+        // SPECIES_ID processor once a species name is resolved so they always have the
+        // right input. The legacy PLANT_REGISTRATION_ANALYSIS job is retained purely so
+        // `plant_analyses` / `PlantAnalysis` stays populated for backwards-compatible
+        // reads (latestAnalysis on the detail response, reminder service, screensaver
+        // fallbacks) while the frontend migrates to bio sections.
         jobPublisher.publish(PlantJobMessage.builder()
                 .jobType(PlantJobMessage.JobType.PLANT_REGISTRATION_ANALYSIS)
                 .plantId(plantId)
@@ -129,11 +148,27 @@ public class PlantCommandService {
                 .imageIds(List.of(imageId))
                 .build());
 
+        bioSectionInvalidator.enqueueRefresh(plantId, PlantBioSectionKey.SPECIES_ID);
+        bioSectionInvalidator.enqueueRefresh(plantId, PlantBioSectionKey.HEALTH_ASSESSMENT);
+
         jobPublisher.publish(PlantJobMessage.builder()
                 .jobType(PlantJobMessage.JobType.PLANT_ILLUSTRATION_GENERATION)
                 .plantId(plantId)
                 .imageIds(List.of(imageId))
                 .build());
+
+        if (location != null && !location.isBlank()) {
+            // Legacy: PLACEMENT_NOTES_SUMMARY writes Plant.placement_notes_summary.
+            // Superseded by the PLACEMENT_CARE bio section (populated via the
+            // species-cascade fan-out). Kept for one release so older clients
+            // reading the denormalized column continue to work during backfill.
+            @SuppressWarnings("deprecation")
+            PlantJobMessage legacyPlacementSummary = PlantJobMessage.builder()
+                    .jobType(PlantJobMessage.JobType.PLACEMENT_NOTES_SUMMARY)
+                    .plantId(plantId)
+                    .build();
+            jobPublisher.publish(legacyPlacementSummary);
+        }
 
         log.info("Plant registered: id={}, analysis enqueued: id={}", plantId, analysisId);
 
@@ -273,33 +308,62 @@ public class PlantCommandService {
             throw new IllegalArgumentException("growingContext must be INDOOR or OUTDOOR");
         }
         plant.setGrowingContext(ctx);
-        plant.setLatitude(request.latitude());
-        plant.setLongitude(request.longitude());
+        if (ctx == PlantGrowingContext.OUTDOOR) {
+            GeoCoordinates coords = geocodingService
+                    .geocode(plant.getGeoCity(), plant.getGeoState(), plant.getGeoCountry())
+                    .orElse(null);
+            plant.setLatitude(coords != null ? coords.latitude() : null);
+            plant.setLongitude(coords != null ? coords.longitude() : null);
+        } else {
+            plant.setLatitude(null);
+            plant.setLongitude(null);
+        }
         plantRepository.save(plant);
         jobPublisher.publish(PlantJobMessage.builder()
                 .jobType(PlantJobMessage.JobType.PLANT_REMINDER_RECOMPUTE)
                 .plantId(plantId)
                 .build());
+        bioSectionInvalidator.onGrowingChanged(plantId);
         log.info("Plant growing context updated: id={}, context={}", plantId, ctx);
     }
 
     @Transactional
     public RequestReanalysisResponse requestReanalysis(Long plantId) {
         findActivePlant(plantId);
+        bioSectionInvalidator.onReanalysisRequested(plantId);
         return enqueueReanalysis(plantId);
     }
 
     /**
-     * Updates persisted placement seed text and enqueues a full reanalysis so
+     * Updates persisted placement seed text, enqueues a dedicated job to refresh the
+     * single-sentence placement notes caption, and enqueues a full reanalysis so
      * {@code placementGuidance} / {@code placementGeneralGuidance} reflect the new context.
      */
     @Transactional
     public RequestReanalysisResponse updatePlantPlacement(Long plantId, String location) {
         Plant plant = findActivePlant(plantId);
         String trimmed = location != null ? location.trim() : null;
-        plant.setLocation((trimmed == null || trimmed.isEmpty()) ? null : trimmed);
+        String normalized = (trimmed == null || trimmed.isEmpty()) ? null : trimmed;
+        plant.setLocation(normalized);
+        // Clear the cached caption immediately so stale text doesn't show while the
+        // dedicated summary job runs (or, when notes are cleared, stays blank).
+        plant.setPlacementNotesSummary(null);
         plantRepository.save(plant);
         log.info("Plant placement seed updated: id={}", plantId);
+
+        if (normalized != null) {
+            // Legacy: see registerPlant() for why this is still enqueued. Will be
+            // removed once all clients read PLACEMENT_CARE from bioSections.
+            @SuppressWarnings("deprecation")
+            PlantJobMessage legacyPlacementSummary = PlantJobMessage.builder()
+                    .jobType(PlantJobMessage.JobType.PLACEMENT_NOTES_SUMMARY)
+                    .plantId(plantId)
+                    .build();
+            jobPublisher.publish(legacyPlacementSummary);
+        }
+
+        bioSectionInvalidator.onPlacementChanged(plantId);
+
         return enqueueReanalysis(plantId);
     }
 
@@ -331,6 +395,54 @@ public class PlantCommandService {
                 .build();
         historyEntryRepository.save(entry);
         log.info("History note added for plant {}", plantId);
+        bioSectionInvalidator.onJournalChanged(plantId);
+        createAndEnqueueHistorySummaryAnalysis(plantId);
+    }
+
+    /**
+     * Uploads a new primary photo for an existing plant: the new image becomes the hero
+     * (via {@code primaryImageId} + newest-first ordering in {@link PlantQueryService}),
+     * the previous main slides into the "Photo history" strip, a history entry is auto-
+     * recorded, and the bio health check is refreshed so the next view re-keys the
+     * vision cache off the new primary image.
+     */
+    @Transactional
+    public void uploadPrimaryPhoto(Long plantId, MultipartFile imageFile, String noteText) {
+        Plant plant = findActivePlant(plantId);
+        validateImageFile(imageFile);
+
+        String storagePath = imageStorageService.store(imageFile, plantId);
+        PlantImage image = PlantImage.builder()
+                .plantId(plantId)
+                .imageType(PlantImage.ImageType.ORIGINAL_UPLOAD)
+                .storageType(imageStorageService.getStorageType())
+                .storagePath(storagePath)
+                .mimeType(imageFile.getContentType())
+                .originalFilename(imageFile.getOriginalFilename())
+                .capturedAt(OffsetDateTime.now())
+                .sortOrder(0)
+                .build();
+        image = plantImageRepository.save(image);
+
+        // Make this the new main image. Also busts the vision cache fingerprint in
+        // PlantBioSectionProcessor.imagePathForFingerprint (keyed on primaryImageId).
+        plant.setPrimaryImageId(image.getId());
+        plantRepository.save(plant);
+
+        String caption = (noteText != null && !noteText.isBlank()) ? noteText.trim() : null;
+        String entryText = caption != null ? "Added a new photo: " + caption : "Added a new photo";
+        PlantHistoryEntry entry = PlantHistoryEntry.builder()
+                .plantId(plantId)
+                .imageId(image.getId())
+                .noteText(entryText)
+                .build();
+        historyEntryRepository.save(entry);
+        log.info("Primary photo uploaded for plant {}, imageId={}", plantId, image.getId());
+
+        // Re-run the health check against the new photo (SPECIES_ID is also refreshed so
+        // the cascade stays consistent if the species reading shifts with a better shot).
+        bioSectionInvalidator.onReanalysisRequested(plantId);
+        bioSectionInvalidator.onJournalChanged(plantId);
         createAndEnqueueHistorySummaryAnalysis(plantId);
     }
 
@@ -360,6 +472,7 @@ public class PlantCommandService {
                 .build();
         historyEntryRepository.save(entry);
         log.info("History image added for plant {}", plantId);
+        bioSectionInvalidator.onJournalChanged(plantId);
         createAndEnqueueHistorySummaryAnalysis(plantId);
     }
 

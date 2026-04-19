@@ -34,14 +34,12 @@ public class PlantController {
             @RequestPart(value = "geoCountry", required = false) String geoCountry,
             @RequestPart(value = "geoState", required = false) String geoState,
             @RequestPart(value = "geoCity", required = false) String geoCity,
-            @RequestPart(value = "growingContext", required = false) String growingContext,
-            @RequestPart(value = "latitude", required = false) String latitude,
-            @RequestPart(value = "longitude", required = false) String longitude) {
+            @RequestPart(value = "growingContext", required = false) String growingContext) {
 
         OffsetDateTime lastWatered = lastWateredAt != null ? OffsetDateTime.parse(lastWateredAt) : null;
         CreatePlantResponse response = commandService.registerPlant(
                 image, name, location, goalsText, lastWatered, geoCountry, geoState, geoCity,
-                parseGrowingContext(growingContext), parseCoordinate(latitude), parseCoordinate(longitude));
+                parseGrowingContext(growingContext));
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 
@@ -53,17 +51,6 @@ public class PlantController {
             return PlantGrowingContext.valueOf(raw.trim().toUpperCase());
         } catch (IllegalArgumentException e) {
             return PlantGrowingContext.INDOOR;
-        }
-    }
-
-    private static Double parseCoordinate(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
-        try {
-            return Double.parseDouble(raw.trim());
-        } catch (NumberFormatException e) {
-            return null;
         }
     }
 
@@ -157,6 +144,20 @@ public class PlantController {
             @RequestPart("image") MultipartFile image,
             @RequestPart(value = "noteText", required = false) String noteText) {
         commandService.addHistoryImage(id, image, noteText);
+        return ResponseEntity.status(HttpStatus.CREATED).build();
+    }
+
+    /**
+     * New primary photo for an existing plant: promotes the uploaded image to hero,
+     * pushes the previous one into the Photo history strip, records a history entry,
+     * and refreshes the health-assessment bio section.
+     */
+    @PostMapping(value = "/{id}/photos", consumes = "multipart/form-data")
+    public ResponseEntity<Void> uploadPlantPhoto(
+            @PathVariable Long id,
+            @RequestPart("image") MultipartFile image,
+            @RequestPart(value = "noteText", required = false) String noteText) {
+        commandService.uploadPrimaryPhoto(id, image, noteText);
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 

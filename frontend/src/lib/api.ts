@@ -165,7 +165,7 @@ export async function updatePlantName(plantId: number, name: string | null): Pro
 
 export async function updatePlantGrowing(
   plantId: number,
-  body: { growingContext: PlantGrowingContext; latitude: number | null; longitude: number | null }
+  body: { growingContext: PlantGrowingContext }
 ): Promise<void> {
   return apiFetch<void>(`/api/plants/${plantId}/growing`, {
     method: "PATCH",
@@ -213,6 +213,26 @@ export async function addHistoryImage(
   formData.append("image", image);
   if (noteText) formData.append("noteText", noteText);
   return apiFetch<void>(`/api/plants/${plantId}/history/image`, {
+    method: "POST",
+    body: formData,
+  });
+}
+
+/**
+ * Uploads a new primary/hero photo for an existing plant. The server promotes
+ * it to the main image, pushes the previous hero into the Photo history strip,
+ * records a history entry (with optional caption), and refreshes the health
+ * bio section.
+ */
+export async function uploadPlantPhoto(
+  plantId: number,
+  image: File,
+  noteText?: string
+): Promise<void> {
+  const formData = new FormData();
+  formData.append("image", image);
+  if (noteText) formData.append("noteText", noteText);
+  return apiFetch<void>(`/api/plants/${plantId}/photos`, {
     method: "POST",
     body: formData,
   });

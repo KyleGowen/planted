@@ -15,6 +15,9 @@ public interface PlantImageRepository extends JpaRepository<PlantImage, Long> {
     List<PlantImage> findByPlantIdAndImageTypeOrderBySortOrderAscCreatedAtAsc(
             Long plantId, PlantImage.ImageType imageType);
 
+    List<PlantImage> findByPlantIdAndImageTypeOrderByCreatedAtDesc(
+            Long plantId, PlantImage.ImageType imageType);
+
     Optional<PlantImage> findFirstByPlantIdAndImageTypeOrderByCreatedAtDesc(
             Long plantId, PlantImage.ImageType imageType);
 }
