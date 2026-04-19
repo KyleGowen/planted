@@ -90,6 +90,8 @@ export interface PlantListItemResponse {
   analysisStatus: AnalysisStatus | null;
   scientificName: string | null;
   speciesOverview: string | null;
+  /** Omitted by older APIs; treated as INDOOR when missing. */
+  growingContext?: PlantGrowingContext;
 }
 
 export interface PlantHistoryEntryDto {

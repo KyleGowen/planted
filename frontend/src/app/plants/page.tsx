@@ -62,8 +62,15 @@ export default function PlantsPage() {
     });
   };
 
+  const indoorPlants = (plants ?? []).filter(
+    (p) => p.growingContext !== "OUTDOOR",
+  );
+  const outdoorPlants = (plants ?? []).filter(
+    (p) => p.growingContext === "OUTDOOR",
+  );
+
   return (
-    <main className="mx-auto max-w-2xl px-4 py-8">
+    <main className="mx-auto max-w-5xl px-4 py-8">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
@@ -163,10 +170,35 @@ export default function PlantsPage() {
 
       {/* Plant list */}
       {plants && plants.length > 0 && (
-        <div className="space-y-2.5">
-          {plants.map((plant) => (
-            <PlantListItemCard key={plant.id} plant={plant} />
-          ))}
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <section>
+            <h2 className="mb-3 text-sm font-medium text-stone-600">
+              Indoor{" "}
+              <span className="text-stone-400">({indoorPlants.length})</span>
+            </h2>
+            <div className="space-y-2.5">
+              {indoorPlants.map((plant) => (
+                <PlantListItemCard key={plant.id} plant={plant} />
+              ))}
+              {indoorPlants.length === 0 && (
+                <p className="text-sm text-stone-400">No indoor plants.</p>
+              )}
+            </div>
+          </section>
+          <section>
+            <h2 className="mb-3 text-sm font-medium text-stone-600">
+              Outdoor{" "}
+              <span className="text-stone-400">({outdoorPlants.length})</span>
+            </h2>
+            <div className="space-y-2.5">
+              {outdoorPlants.map((plant) => (
+                <PlantListItemCard key={plant.id} plant={plant} />
+              ))}
+              {outdoorPlants.length === 0 && (
+                <p className="text-sm text-stone-400">No outdoor plants.</p>
+              )}
+            </div>
+          </section>
         </div>
       )}
     </main>

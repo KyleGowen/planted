@@ -1,5 +1,7 @@
 package com.planted.dto;
 
+import com.planted.entity.PlantGrowingContext;
+
 public record PlantListItemResponse(
         Long id,
         String name,
@@ -13,5 +15,6 @@ public record PlantListItemResponse(
         String status,
         String analysisStatus,
         String scientificName,
-        String speciesOverview
+        String speciesOverview,
+        PlantGrowingContext growingContext
 ) {}

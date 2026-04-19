@@ -200,7 +200,8 @@ public class PlantMapper {
                 plant.getStatus().name(),
                 analysisStatus,
                 scientificName,
-                speciesOverview
+                speciesOverview,
+                plant.getGrowingContext()
         );
     }
 
