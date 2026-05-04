@@ -594,6 +594,9 @@ export function PlantBioView({
       readOnly={readOnly}
       reminderState={plant.reminderState}
       healthDiagnosis={analysis?.healthDiagnosis ?? null}
+      onWater={readOnly ? () => waterMutation.mutate(new Date().toISOString()) : undefined}
+      onFertilizer={readOnly ? () => fertMutation.mutate() : undefined}
+      onPrune={readOnly ? () => pruneMutation.mutate() : undefined}
     />
   );
 
@@ -879,6 +882,9 @@ function SpeciesPanel({
   readOnly = false,
   reminderState = null,
   healthDiagnosis = null,
+  onWater,
+  onFertilizer,
+  onPrune,
 }: {
   analysis: PlantDetailResponse["latestAnalysis"];
   speciesIdRefreshing?: boolean;
@@ -899,6 +905,12 @@ function SpeciesPanel({
   reminderState?: PlantDetailResponse["reminderState"] | null;
   /** Screensaver-only: rendered as an amber health block beneath the history tiles. */
   healthDiagnosis?: string | null;
+  /** Screensaver-only: logs a watering event at the current time. */
+  onWater?: () => void;
+  /** Screensaver-only: logs a fertilizer event at the current time. */
+  onFertilizer?: () => void;
+  /** Screensaver-only: logs a prune event at the current time. */
+  onPrune?: () => void;
 }) {
   // A plant is "species-ready" as soon as the species id section has produced
   // a name. We don't require every care section to have completed.
@@ -926,7 +938,13 @@ function SpeciesPanel({
     <div className="rounded-2xl border border-stone-200 bg-white p-3 h-full flex flex-col gap-3 min-h-0 overflow-hidden">
       {readOnly && reminderState && (
         <div className="flex justify-center flex-shrink-0">
-          <ReminderIconRow reminderState={reminderState} size={20} />
+          <ReminderIconRow
+            reminderState={reminderState}
+            size={23}
+            onWater={onWater}
+            onFertilizer={onFertilizer}
+            onPrune={onPrune}
+          />
         </div>
       )}
       <div className="flex-[0_1_auto] min-h-0 overflow-y-auto space-y-3">
