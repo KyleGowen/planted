@@ -6,6 +6,7 @@ import com.planted.entity.LlmPrompt;
 import com.planted.entity.LlmRequest;
 import com.planted.repository.LlmPromptRepository;
 import com.planted.repository.LlmRequestRepository;
+import com.planted.service.UserSettingsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,9 +32,7 @@ public class OpenAiPlantClient {
     private final ObjectMapper objectMapper;
     private final LlmPromptRepository promptRepository;
     private final LlmRequestRepository requestRepository;
-
-    @Value("${planted.openai.api-key:}")
-    private String apiKey;
+    private final UserSettingsService userSettingsService;
 
     @Value("${planted.openai.model:gpt-4o}")
     private String model;
@@ -178,6 +177,7 @@ public class OpenAiPlantClient {
             Long plantId,
             Long analysisId) {
 
+        String apiKey = userSettingsService.getEffectiveOpenAiApiKey();
         if (apiKey == null || apiKey.isBlank()) {
             throw new IllegalStateException(
                     "OpenAI is not configured: set planted.openai.api-key (or OPENAI_API_KEY) to generate a history summary.");
@@ -241,6 +241,7 @@ public class OpenAiPlantClient {
      * @param plantId  for audit logging
      */
     public String summarizePlacementNotes(String location, Long plantId) {
+        String apiKey = userSettingsService.getEffectiveOpenAiApiKey();
         if (apiKey == null || apiKey.isBlank()) {
             throw new IllegalStateException(
                     "OpenAI is not configured: set planted.openai.api-key (or OPENAI_API_KEY) to summarize placement notes.");
@@ -324,6 +325,7 @@ public class OpenAiPlantClient {
             List<String> mimeTypes,
             Long plantId) {
 
+        String apiKey = userSettingsService.getEffectiveOpenAiApiKey();
         if (apiKey == null || apiKey.isBlank()) {
             throw new IllegalStateException(
                     "OpenAI is not configured: set planted.openai.api-key (or OPENAI_API_KEY) to generate bio sections.");
@@ -479,6 +481,7 @@ public class OpenAiPlantClient {
 
     /** Calls OpenAI with up to 3 retries on 429 (rate limit), backing off 5s between attempts. */
     private String callWithRetry(Map<String, Object> requestBody, String promptKey) {
+        String apiKey = userSettingsService.getEffectiveOpenAiApiKey();
         int maxAttempts = 3;
         long backoffMs = 5_000;
         Exception lastException = null;

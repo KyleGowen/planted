@@ -2,6 +2,7 @@ package com.planted.client;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.planted.service.UserSettingsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,9 +25,7 @@ public class OpenAiImageGenerationClient {
 
     private final WebClient.Builder webClientBuilder;
     private final ObjectMapper objectMapper;
-
-    @Value("${planted.openai.api-key:}")
-    private String apiKey;
+    private final UserSettingsService userSettingsService;
 
     @Value("${planted.openai.image-model:dall-e-3}")
     private String imageModel;
@@ -60,6 +59,7 @@ public class OpenAiImageGenerationClient {
         );
 
         try {
+            String apiKey = userSettingsService.getEffectiveOpenAiApiKey();
             String response = webClientBuilder.build()
                     .post()
                     .uri(IMAGES_API_URL)

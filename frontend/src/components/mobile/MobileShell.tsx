@@ -6,8 +6,9 @@ import { HomeTab } from "./HomeTab";
 import { MyPlantsTab } from "./MyPlantsTab";
 import { ActivityTab } from "./ActivityTab";
 import { CameraModal } from "./CameraModal";
+import { ProfileTab } from "./ProfileTab";
 
-export type MobileTab = "home" | "plants" | "activity";
+export type MobileTab = "home" | "plants" | "activity" | "profile";
 
 /**
  * Top-level mobile layout shell. Owns tab state and renders the appropriate
@@ -33,6 +34,7 @@ export function MobileShell() {
         {activeTab === "home" && <HomeTab />}
         {activeTab === "plants" && <MyPlantsTab />}
         {activeTab === "activity" && <ActivityTab />}
+        {activeTab === "profile" && <ProfileTab />}
       </div>
 
       <BottomTabBar activeTab={activeTab} onTabSelect={handleTabSelect} />

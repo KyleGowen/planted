@@ -11,7 +11,7 @@ import type {
   RequestReanalysisResponse,
   ActivityEntryDto,
 } from "@/types/plant";
-import type { UserLocationResponse } from "@/types/user";
+import type { UserLocationResponse, UserSettingsResponse, UpdateUserSettingsRequest } from "@/types/user";
 
 /**
  * In development, omit the host so requests stay same-origin (e.g. http://192.168.x.x:3000/api/...).
@@ -90,6 +90,22 @@ export async function putUserLocation(body: {
   address: string | null;
 }): Promise<UserLocationResponse> {
   return apiFetch<UserLocationResponse>("/api/user/location", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+// ── User settings ────────────────────────────────────────────────────────────
+
+export async function getUserSettings(): Promise<UserSettingsResponse> {
+  return apiFetch<UserSettingsResponse>("/api/user/settings");
+}
+
+export async function putUserSettings(
+  body: UpdateUserSettingsRequest
+): Promise<UserSettingsResponse> {
+  return apiFetch<UserSettingsResponse>("/api/user/settings", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

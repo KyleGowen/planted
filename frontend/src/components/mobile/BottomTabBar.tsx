@@ -1,6 +1,6 @@
 "use client";
 
-import { Sprout, Camera, Leaf, History } from "lucide-react";
+import { Sprout, Camera, Leaf, History, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { MobileTab } from "./MobileShell";
 
@@ -34,6 +34,11 @@ const TABS: Tab[] = [
     id: "activity",
     label: "Activity",
     icon: <History size={22} />,
+  },
+  {
+    id: "profile",
+    label: "Profile",
+    icon: <User size={22} />,
   },
 ];
 

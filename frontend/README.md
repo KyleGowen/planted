@@ -38,7 +38,7 @@ The plant detail **Care** panel organizes watering, fertilizer, pruning, light, 
 
 **TanStack Query Devtools** (floating icon) are **off** by default. In development, set **`NEXT_PUBLIC_QUERY_DEVTOOLS=true`** in `.env.local` to enable them (`src/lib/providers.tsx`).
 
-The **Your Plants** list (`/plants`) includes an optional **Your Location** field; it calls `getUserLocation` / `putUserLocation` in `src/lib/api.ts` and saves on blur so care and history LLM prompts can use typical regional climate context (not live weather).
+**Settings** (`/settings` on desktop, **Profile** tab on mobile): manages display name, location, OpenAI API key override, and screensaver slide duration. Calls `getUserSettings` / `putUserSettings` (`GET` / `PUT /api/user/settings`) and `getUserLocation` / `putUserLocation` for the location field. The API key is write-only — the server returns only `apiKeyConfigured: boolean`. Location is no longer on the plants list page.
 
 The **About** panel **History** section prefers **`historyDailyDigests`** (one narrative tile per local calendar day) when the backend returns them after **Generate / Refresh summary**; otherwise it uses structured `historyEntries` plus legacy summary text parsing.
 

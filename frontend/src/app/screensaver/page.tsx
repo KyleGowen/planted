@@ -3,12 +3,10 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { getPlant, listPlants } from "@/lib/api";
+import { getPlant, getUserSettings, listPlants } from "@/lib/api";
 import { plantImageSrc } from "@/lib/plantMediaUrl";
 import type { PlantImageDto, PlantListItemResponse } from "@/types/plant";
 import { PlantBioView } from "@/components/plant/PlantBioView";
-
-const DISPLAY_DURATION_MS = 60_000;
 
 function shuffle<T>(arr: T[]): T[] {
   const copy = [...arr];
@@ -28,6 +26,15 @@ export default function ScreensaverPage() {
     queryFn: listPlants,
     staleTime: 60_000,
   });
+
+  const { data: userSettings } = useQuery({
+    queryKey: ["userSettings"],
+    queryFn: getUserSettings,
+    staleTime: 60_000,
+  });
+
+  const DISPLAY_DURATION_MS =
+    (userSettings?.screensaverSlideDurationSeconds ?? 60) * 1000;
 
   // Reshuffle only when the set of plant IDs changes, so background refetches
   // don't jump the user to a new slide mid-viewing.
@@ -129,7 +136,7 @@ export default function ScreensaverPage() {
       setCurrentIndex((prev) => (prev + 1) % queue.length);
     }, DISPLAY_DURATION_MS);
     return () => clearInterval(timer);
-  }, [queue]);
+  }, [queue, DISPLAY_DURATION_MS]);
 
   const handleExit = useCallback(() => {
     if (document.fullscreenElement) {

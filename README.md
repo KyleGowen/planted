@@ -145,7 +145,9 @@ Each list card thumbnail uses: `illustratedImage` → `originalImage` (user's ow
 
 The **`ReminderIconRow`** underneath each card (and on the `/screensaver` tiles) always renders six fixed icons — **water, fertilizer, pruning, light, placement, health** — and illuminates the ones that need attention. Water/fertilizer/pruning are driven by scheduled care events (`wateringDue|wateringOverdue`, `fertilizerDue`, `pruningDue`); **light, placement, and health** are driven by LLM-authored booleans on each bio section: `LIGHT_CARE.attentionNeeded`, `PLACEMENT_CARE.attentionNeeded`, and `HEALTH_ASSESSMENT.attentionNeeded`, with accompanying short `attentionReason` strings used as tooltip/aria copy. `PlantReminderService.syncBioAttention` denormalises those three flags + reasons onto `plant_reminder_state` so the list stays a single fast read.
 
-**Your Location:** Optional home or growing-site address (`GET` / `PUT /api/user/location`, JSON `{ "address": "..." | null }`). Stored in `user_physical_addresses` keyed by `planted.user.default-id` until real auth exists; new plants get the same `user_id` on registration. When set, registration, reanalysis, pruning, and history-summary prompts include it as regional climate context only (no live weather APIs).
+**Your Location:** Optional home or growing-site address (`GET` / `PUT /api/user/location`, JSON `{ "address": "..." | null }`). Stored in `user_physical_addresses` keyed by `planted.user.default-id` until real auth exists; new plants get the same `user_id` on registration. When set, registration, reanalysis, pruning, and history-summary prompts include it as regional climate context only (no live weather APIs). Editable in **Settings** (`/settings` desktop / **Profile** tab mobile) — no longer on the plants list page.
+
+**User Settings:** Display name, location, OpenAI API key override, and screensaver slide duration are managed at `GET` / `PUT /api/user/settings`. The API key override stored there takes precedence over the `OPENAI_API_KEY` env var at call time, so the key can be updated without a backend restart. The key is **never returned** by the API — only `apiKeyConfigured: boolean` is exposed.
 
 ---
 
@@ -155,7 +157,7 @@ The **`ReminderIconRow`** underneath each card (and on the `/screensaver` tiles)
 
 | Variable | Description | Local default |
 |---|---|---|
-| `OPENAI_API_KEY` | OpenAI API key (required for analysis) | — |
+| `OPENAI_API_KEY` | OpenAI API key (required for analysis). Can also be overridden at runtime via the in-app **Settings** page — no restart required. | — |
 | `SPRING_DATASOURCE_URL` | PostgreSQL JDBC URL | `jdbc:postgresql://localhost:5434/planted_db` (matches `docker-compose` host port) |
 | `SPRING_DATASOURCE_USERNAME` | DB username | `planted` |
 | `SPRING_DATASOURCE_PASSWORD` | DB password | `planted` |
@@ -284,13 +286,13 @@ Versioned SQL migrations live in `backend/src/main/resources/db/migration/` (`V_
 planted/
 ├── backend/
 │   └── src/main/java/com/planted/
-│       ├── controller/     # PlantController, ReminderController, UserLocationController
+│       ├── controller/     # PlantController, ReminderController, UserLocationController, UserSettingsController
 │       ├── service/        # PlantCommandService, PlantQueryService, PlantReminderService, BioSectionInvalidator
 │       ├── worker/         # PlantJobWorker + processors (incl. PlantBioSectionProcessor)
 │       ├── client/         # OpenAiPlantClient (generateBioSection), OpenAiImageGenerationClient
 │       ├── bio/            # PlantBioSectionStrategy + strategies/* + BioSectionSchemas
 │       ├── repository/     # Spring Data JPA repositories (incl. PlantBioSectionRepository)
-│       ├── entity/         # JPA entities (incl. PlantBioSection, PlantBioSectionKey)
+│       ├── entity/         # JPA entities (incl. PlantBioSection, PlantBioSectionKey, UserSettings)
 │       ├── dto/            # Request/response records
 │       ├── storage/        # ImageStorageService + impls
 │       ├── queue/          # PlantJobPublisher + impls

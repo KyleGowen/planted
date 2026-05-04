@@ -191,9 +191,9 @@ export default function UploadPage() {
             </select>
             {growingContext === "OUTDOOR" && !hasUserLocation && (
               <p className="mt-2 text-xs text-amber-700">
-                Set your location on the{" "}
-                <Link href="/plants" className="underline">
-                  Plants page
+                Set your location in{" "}
+                <Link href="/settings" className="underline">
+                  Settings
                 </Link>{" "}
                 so we can pull local weather for reminders.
               </p>
