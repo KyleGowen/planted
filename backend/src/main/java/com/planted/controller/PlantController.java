@@ -31,14 +31,11 @@ public class PlantController {
             @RequestPart(value = "location", required = false) String location,
             @RequestPart(value = "goalsText", required = false) String goalsText,
             @RequestPart(value = "lastWateredAt", required = false) String lastWateredAt,
-            @RequestPart(value = "geoCountry", required = false) String geoCountry,
-            @RequestPart(value = "geoState", required = false) String geoState,
-            @RequestPart(value = "geoCity", required = false) String geoCity,
             @RequestPart(value = "growingContext", required = false) String growingContext) {
 
         OffsetDateTime lastWatered = lastWateredAt != null ? OffsetDateTime.parse(lastWateredAt) : null;
         CreatePlantResponse response = commandService.registerPlant(
-                image, name, location, goalsText, lastWatered, geoCountry, geoState, geoCity,
+                image, name, location, goalsText, lastWatered,
                 parseGrowingContext(growingContext));
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }

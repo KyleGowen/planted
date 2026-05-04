@@ -4,6 +4,7 @@ import Image from "next/image";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sprout } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { plantImageSrc } from "@/lib/plantMediaUrl";
 import type { PlantImageDto } from "@/types/plant";
 
 interface Props {
@@ -34,7 +35,7 @@ export function PlantHeroImage({ image, isLoading, className }: Props) {
   return (
     <div className={cn("relative overflow-hidden rounded-xl bg-stone-100", className ?? "aspect-square w-full")}>
       <Image
-        src={image.url}
+        src={plantImageSrc(image.url)}
         alt="Plant"
         fill
         className="object-cover transition-opacity duration-300"

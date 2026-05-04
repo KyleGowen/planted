@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { cn } from "@/lib/utils";
+import { plantImageSrc } from "@/lib/plantMediaUrl";
 import type { PlantImageDto } from "@/types/plant";
 
 interface Props {
@@ -28,12 +29,14 @@ export function PlantImageStrip({ images, activeImageId, onSelect, className }: 
           )}
           aria-label={`View image ${img.id}`}
         >
-          {(img.url.startsWith("/") ||
-            (img.url.startsWith("http") &&
-              !img.url.includes("inaturalist") &&
-              !img.url.includes("gbif"))) ? (
+          {(() => {
+            const src = plantImageSrc(img.url);
+            return (src.startsWith("/") ||
+            (src.startsWith("http") &&
+              !src.includes("inaturalist") &&
+              !src.includes("gbif"))) ? (
             <Image
-              src={img.url}
+              src={src}
               alt=""
               fill
               className="object-cover"
@@ -43,7 +46,8 @@ export function PlantImageStrip({ images, activeImageId, onSelect, className }: 
             <div className="flex h-full w-full items-center justify-center bg-stone-100 text-xs text-stone-400">
               ref
             </div>
-          )}
+          );
+          })()}
         </button>
       ))}
     </div>

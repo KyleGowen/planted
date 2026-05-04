@@ -10,14 +10,17 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Pins the OWNER CERTAINTY plumbing: the four bio strategies that previously
- * never received owner free-text ({@code goals_text}) must now thread it into
- * their prompt variables so the V43 prompts can honor owner-asserted species,
- * native range, and care-routine facts.
+ * Pins the OWNER CERTAINTY plumbing: every bio strategy that reasons about
+ * owner-asserted facts must thread {@code goals_text} and {@code notes_text}
+ * into its prompt variables so the V44 prompts can honor owner-asserted
+ * species, native range, and care-routine facts — whether those assertions
+ * live in goals_text (from the plant's goals field) or notes_text (from
+ * journal notes).
  */
 class BioStrategyGoalsTextTest {
 
     private static final String GOALS = "I want it to bloom; native to Madagascar";
+    private static final String NOTES = "2026-04-19: Correcting earlier ID — this is actually Sansevieria cylindrica, not Sansevieria trifasciata.";
 
     private static Plant plant() {
         Plant plant = new Plant();
@@ -35,36 +38,80 @@ class BioStrategyGoalsTextTest {
                 "West Africa",
                 "Austin, TX",
                 "",
-                GOALS);
+                GOALS,
+                NOTES);
     }
 
     @Test
-    void speciesDescriptionStrategy_passesGoalsText() {
+    void speciesIdStrategy_passesGoalsAndNotes() {
+        Map<String, String> vars = new SpeciesIdStrategy().inputs(plant(), ctx());
+        assertThat(vars).containsEntry("goals_text", GOALS);
+        assertThat(vars).containsEntry("notes_text", NOTES);
+    }
+
+    @Test
+    void speciesDescriptionStrategy_passesGoalsAndNotes() {
         Map<String, String> vars = new SpeciesDescriptionStrategy().inputs(plant(), ctx());
         assertThat(vars).containsEntry("goals_text", GOALS);
+        assertThat(vars).containsEntry("notes_text", NOTES);
     }
 
     @Test
-    void waterCareStrategy_passesGoalsText() {
+    void waterCareStrategy_passesGoalsAndNotes() {
         Map<String, String> vars = new WaterCareStrategy().inputs(plant(), ctx());
         assertThat(vars).containsEntry("goals_text", GOALS);
+        assertThat(vars).containsEntry("notes_text", NOTES);
     }
 
     @Test
-    void fertilizerCareStrategy_passesGoalsText() {
+    void fertilizerCareStrategy_passesGoalsAndNotes() {
         Map<String, String> vars = new FertilizerCareStrategy().inputs(plant(), ctx());
         assertThat(vars).containsEntry("goals_text", GOALS);
+        assertThat(vars).containsEntry("notes_text", NOTES);
     }
 
     @Test
-    void pruningCareStrategy_passesGoalsText() {
+    void pruningCareStrategy_passesGoalsAndNotes() {
         Map<String, String> vars = new PruningCareStrategy().inputs(plant(), ctx());
         assertThat(vars).containsEntry("goals_text", GOALS);
+        assertThat(vars).containsEntry("notes_text", NOTES);
     }
 
     @Test
-    void goalsText_defaultsToEmptyStringWhenContextIsEmpty() {
-        Map<String, String> vars = new WaterCareStrategy().inputs(plant(), BioSectionContext.empty());
-        assertThat(vars).containsEntry("goals_text", "");
+    void placementCareStrategy_passesGoalsAndNotes() {
+        Map<String, String> vars = new PlacementCareStrategy().inputs(plant(), ctx());
+        assertThat(vars).containsEntry("goals_text", GOALS);
+        assertThat(vars).containsEntry("notes_text", NOTES);
+    }
+
+    @Test
+    void lightCareStrategy_passesGoalsAndNotes() {
+        Map<String, String> vars = new LightCareStrategy().inputs(plant(), ctx());
+        assertThat(vars).containsEntry("goals_text", GOALS);
+        assertThat(vars).containsEntry("notes_text", NOTES);
+    }
+
+    @Test
+    void healthAssessmentStrategy_passesGoalsAndNotes() {
+        Map<String, String> vars = new HealthAssessmentStrategy().inputs(plant(), ctx());
+        assertThat(vars).containsEntry("goals_text", GOALS);
+        assertThat(vars).containsEntry("notes_text", NOTES);
+    }
+
+    @Test
+    void ownerFreeText_defaultsToEmptyStringsWhenContextIsEmpty() {
+        BioSectionContext empty = BioSectionContext.empty();
+        Plant bare = new Plant();
+        bare.setId(2L);
+
+        assertThat(new SpeciesIdStrategy().inputs(bare, empty))
+                .containsEntry("goals_text", "")
+                .containsEntry("notes_text", "");
+        assertThat(new WaterCareStrategy().inputs(bare, empty))
+                .containsEntry("goals_text", "")
+                .containsEntry("notes_text", "");
+        assertThat(new HealthAssessmentStrategy().inputs(bare, empty))
+                .containsEntry("goals_text", "")
+                .containsEntry("notes_text", "");
     }
 }

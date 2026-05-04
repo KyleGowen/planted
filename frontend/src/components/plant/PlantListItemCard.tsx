@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Sprout } from "lucide-react";
 import { ReminderIconRow } from "./ReminderIconRow";
 import { cn } from "@/lib/utils";
+import { plantImageSrc } from "@/lib/plantMediaUrl";
 import type { PlantListItemResponse } from "@/types/plant";
 
 interface Props {
@@ -38,7 +39,7 @@ export function PlantListItemCard({ plant, className }: Props) {
         <div className="relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-stone-100">
           {thumbnail ? (
             <Image
-              src={thumbnail.url}
+              src={plantImageSrc(thumbnail.url)}
               alt={plant.displayLabel}
               fill
               className="object-cover"

@@ -31,6 +31,7 @@ public class SpeciesDescriptionStrategy implements PlantBioSectionStrategy {
         vars.put("taxonomic_family", Optional.ofNullable(ctx.taxonomicFamily()).orElse(""));
         vars.put("native_regions", Optional.ofNullable(ctx.nativeRegions()).orElse(""));
         vars.put("goals_text", Optional.ofNullable(ctx.goalsText()).orElse(""));
+        vars.put("notes_text", Optional.ofNullable(ctx.notesText()).orElse(""));
         return vars;
     }
 

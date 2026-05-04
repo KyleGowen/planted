@@ -31,6 +31,7 @@ public class FertilizerCareStrategy implements PlantBioSectionStrategy {
         vars.put("growing_context", plant.getGrowingContext() != null ? plant.getGrowingContext().name() : "");
         vars.put("geographic_location", Optional.ofNullable(ctx.geographicLocation()).orElse(""));
         vars.put("goals_text", Optional.ofNullable(ctx.goalsText()).orElse(""));
+        vars.put("notes_text", Optional.ofNullable(ctx.notesText()).orElse(""));
         return vars;
     }
 

@@ -29,6 +29,8 @@ public class HealthAssessmentStrategy implements PlantBioSectionStrategy {
         Map<String, String> vars = new LinkedHashMap<>();
         vars.put("species_name", Optional.ofNullable(ctx.speciesName()).orElse(""));
         vars.put("location", Optional.ofNullable(plant.getLocation()).orElse(""));
+        vars.put("goals_text", Optional.ofNullable(ctx.goalsText()).orElse(""));
+        vars.put("notes_text", Optional.ofNullable(ctx.notesText()).orElse(""));
         return vars;
     }
 

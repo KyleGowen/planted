@@ -61,4 +61,10 @@ class OpenMeteoGeocodingClientParseTest {
         assertThat(client.geocode(null, "WA", "US")).isEmpty();
         assertThat(client.geocode("  ", "WA", "US")).isEmpty();
     }
+
+    @Test
+    void geocodeFreeform_returnsEmptyWhenBlank() {
+        assertThat(client.geocode((String) null)).isEmpty();
+        assertThat(client.geocode("   ")).isEmpty();
+    }
 }

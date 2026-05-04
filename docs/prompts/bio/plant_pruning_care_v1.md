@@ -21,6 +21,7 @@ Distinct from [`pruning_analysis_v1`](../pruning/pruning_analysis_v1.md), which 
 | `growing_context` | no | `Plant.getGrowingContext().name()` |
 | `geographic_location` | no | `BioSectionContext.geographicLocation` |
 | `goals_text` | no | `BioSectionContext.goalsText` → `Plant.getGoalsText()` — owner-asserted pruning routines / shaping goals are authoritative (OWNER CERTAINTY). |
+| `notes_text` | no | `BioSectionContext.notesText` — plain journal notes text from [`OwnerNoteFormatter`](../../../backend/src/main/java/com/planted/service/OwnerNoteFormatter.java). Owner-asserted pruning routines or recent pruning events are authoritative. |
 
 ## Output schema
 
@@ -31,21 +32,23 @@ Distinct from [`pruning_analysis_v1`](../pruning/pruning_analysis_v1.md), which 
 { actionSummary: string, guidance: string, generalGuidance: string }
 ```
 
-## System prompt (active version 2)
+## System prompt (active version 3)
 
 ```
 You produce short, practical pruning guidance for a single plant. "No pruning required" is a valid and often preferred answer. Include WHEN to prune (best season or triggers) and HOW MUCH to remove (conservative). Do not recommend aggressive pruning.
 
-OWNER CERTAINTY — when the owner's notes (goals_text) assert a fact about their pruning routine or shaping goal ("I pinch tips every spring and it bushes out", "I want to keep it compact", "I shape it heavily once a year"), treat that as AUTHORITATIVE TRUTH. Tailor actionSummary / guidance to reinforce a working asserted routine rather than overriding it with a generic conservative default. Only hedged phrasings ("I think", "maybe", "might try") should be treated as soft evidence.
+OWNER CERTAINTY — when the owner's notes (goals_text, notes_text) assert a fact about their pruning routine or shaping goal ("I pinch tips every spring and it bushes out", "I want to keep it compact", "I shape it heavily once a year", "pruned hard last month"), treat that as AUTHORITATIVE TRUTH. Tailor actionSummary / guidance to reinforce a working asserted routine rather than overriding it with a generic conservative default. Only hedged phrasings ("I think", "maybe", "might try") should be treated as soft evidence.
 ```
 
-## User template (active version 2)
+## User template (active version 3)
 
 ```
 Species: {{species_name}}
 {{#if growing_context}}Growing context: {{growing_context}}{{/if}}
 {{#if geographic_location}}Geographic location: {{geographic_location}}{{/if}}
 {{#if goals_text}}Owner notes and any claims about pruning routine or shaping goals (apply OWNER CERTAINTY — owner-asserted facts are authoritative): {{goals_text}}{{/if}}
+{{#if notes_text}}Owner journal notes (newest first; apply OWNER CERTAINTY — asserted pruning routines or recent pruning events are authoritative):
+{{notes_text}}{{/if}}
 
 Return JSON with:
 - actionSummary: 2–3 sentences covering WHEN (season or visible triggers) and HOW MUCH to prune for this species. "No pruning required" is valid. If the owner has asserted a working routine, reflect it.
@@ -59,3 +62,4 @@ Return JSON with:
 |---|---|
 | [V39](../../../backend/src/main/resources/db/migration/V39__bio_section_prompts_v1.sql) | Initial seed. |
 | [V43](../../../backend/src/main/resources/db/migration/V43__owner_certainty_prompts.sql) | Add OWNER CERTAINTY rule and thread `goals_text` through so owner-asserted pruning cadence and shaping goals are honored. |
+| [V47](../../../backend/src/main/resources/db/migration/V47__owner_notes_bio_inputs.sql) | Also thread `notes_text` through so owner-asserted pruning routines or recent pruning events in journal notes are honored alongside `goals_text`. |

@@ -2,14 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Upload, ImagePlus, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { registerPlant } from "@/lib/api";
+import { getUserLocation, registerPlant } from "@/lib/api";
 import type { PlantGrowingContext } from "@/types/plant";
 
 export default function UploadPage() {
@@ -22,11 +22,14 @@ export default function UploadPage() {
   const [name, setName] = useState("");
   const [goalsText, setGoalsText] = useState("");
   const [lastWateredAt, setLastWateredAt] = useState("");
-  const [geoCity, setGeoCity] = useState("");
-  const [geoState, setGeoState] = useState("");
-  const [geoCountry, setGeoCountry] = useState("");
   const [growingContext, setGrowingContext] = useState<PlantGrowingContext>("INDOOR");
   const [isDragging, setIsDragging] = useState(false);
+
+  const { data: userLocation } = useQuery({
+    queryKey: ["userLocation"],
+    queryFn: getUserLocation,
+  });
+  const hasUserLocation = Boolean(userLocation?.address?.trim());
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -38,9 +41,6 @@ export default function UploadPage() {
       if (lastWateredAt) {
         formData.append("lastWateredAt", new Date(lastWateredAt).toISOString());
       }
-      if (geoCountry) formData.append("geoCountry", geoCountry);
-      if (geoState) formData.append("geoState", geoState);
-      if (geoCity) formData.append("geoCity", geoCity);
       formData.append("growingContext", growingContext);
       return registerPlant(formData);
     },
@@ -173,38 +173,12 @@ export default function UploadPage() {
           </div>
 
           <div>
-            <Label className="text-stone-600">
-              Geographic location <span className="text-stone-300 font-normal">(optional — improves watering advice)</span>
-            </Label>
-            <p className="text-xs text-stone-400 mt-0.5 mb-2">
-              Used to factor in local climate when calculating how often to water.
-            </p>
-            <div className="grid grid-cols-3 gap-2">
-              <Input
-                value={geoCity}
-                onChange={(e) => setGeoCity(e.target.value)}
-                placeholder="City"
-              />
-              <Input
-                value={geoState}
-                onChange={(e) => setGeoState(e.target.value)}
-                placeholder="State / Region"
-              />
-              <Input
-                value={geoCountry}
-                onChange={(e) => setGeoCountry(e.target.value)}
-                placeholder="Country"
-              />
-            </div>
-          </div>
-
-          <div>
             <Label htmlFor="growingContext" className="text-stone-600">
               Growing environment
             </Label>
             <p className="text-xs text-stone-400 mt-0.5 mb-2">
-              Outdoor plants use local weather (rain, heat) in care reminders.
-              We&apos;ll derive the location from the city/state/country above &mdash; no coordinates required.
+              Outdoor plants use local weather (rain, heat) in care reminders, based on your
+              saved location.
             </p>
             <select
               id="growingContext"
@@ -215,9 +189,13 @@ export default function UploadPage() {
               <option value="INDOOR">Indoor</option>
               <option value="OUTDOOR">Outdoor</option>
             </select>
-            {growingContext === "OUTDOOR" && !geoCity.trim() && (
+            {growingContext === "OUTDOOR" && !hasUserLocation && (
               <p className="mt-2 text-xs text-amber-700">
-                Add a city above so we can pull local weather for reminders.
+                Set your location on the{" "}
+                <Link href="/plants" className="underline">
+                  Plants page
+                </Link>{" "}
+                so we can pull local weather for reminders.
               </p>
             )}
           </div>

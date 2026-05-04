@@ -29,6 +29,8 @@ public class SpeciesIdStrategy implements PlantBioSectionStrategy {
         Map<String, String> vars = new LinkedHashMap<>();
         vars.put("plant_name", Optional.ofNullable(plant.getName()).orElse(""));
         vars.put("location", Optional.ofNullable(plant.getLocation()).orElse(""));
+        vars.put("goals_text", Optional.ofNullable(ctx.goalsText()).orElse(""));
+        vars.put("notes_text", Optional.ofNullable(ctx.notesText()).orElse(""));
         return vars;
     }
 

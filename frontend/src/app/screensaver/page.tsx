@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { getPlant, listPlants } from "@/lib/api";
+import { plantImageSrc } from "@/lib/plantMediaUrl";
 import type { PlantImageDto, PlantListItemResponse } from "@/types/plant";
 import { PlantBioView } from "@/components/plant/PlantBioView";
 
@@ -159,7 +160,7 @@ export default function ScreensaverPage() {
       (img) => img.mimeType !== "text/html"
     );
     const pool = [...history, ...reference].filter(
-      (img) => img.url !== hero?.url
+      (img) => plantImageSrc(img.url) !== plantImageSrc(hero?.url ?? "")
     );
     if (pool.length === 0) return null;
     return pool[Math.floor(Math.random() * pool.length)];

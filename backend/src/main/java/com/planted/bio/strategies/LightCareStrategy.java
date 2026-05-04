@@ -30,6 +30,8 @@ public class LightCareStrategy implements PlantBioSectionStrategy {
         vars.put("species_name", Optional.ofNullable(ctx.speciesName()).orElse(""));
         vars.put("growing_context", plant.getGrowingContext() != null ? plant.getGrowingContext().name() : "");
         vars.put("location", Optional.ofNullable(plant.getLocation()).orElse(""));
+        vars.put("goals_text", Optional.ofNullable(ctx.goalsText()).orElse(""));
+        vars.put("notes_text", Optional.ofNullable(ctx.notesText()).orElse(""));
         return vars;
     }
 

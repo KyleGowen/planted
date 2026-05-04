@@ -20,6 +20,7 @@
 | `location` | no | `Plant.getLocation()` — placement notes; owner-asserted placement is authoritative (OWNER CERTAINTY). |
 | `geographic_location` | no | `BioSectionContext.geographicLocation` |
 | `goals_text` | no | `BioSectionContext.goalsText` → `Plant.getGoalsText()` — owner-asserted watering routines / care practices are authoritative (OWNER CERTAINTY). |
+| `notes_text` | no | `BioSectionContext.notesText` — plain journal notes text from [`OwnerNoteFormatter`](../../../backend/src/main/java/com/planted/service/OwnerNoteFormatter.java). Owner-asserted watering cadence or plant-behaviour observations are authoritative. |
 
 ## Output schema
 
@@ -30,17 +31,17 @@
 { amount: string, frequency: string, guidance: string }
 ```
 
-## System prompt (active version 2)
+## System prompt (active version 3)
 
 ```
 You produce short, practical watering guidance for a single plant. Be conservative: err toward less water for typical houseplants. When geography is provided, reflect local climate (dry/humid, hot/cold seasons). Do not invent specific numeric schedules when the species is not well-characterized.
 
-OWNER CERTAINTY — the owner's notes (goals_text, location) are a tiered source of evidence:
+OWNER CERTAINTY — the owner's notes (goals_text, location, notes_text) are a tiered source of evidence:
 1. ASSERTIONS — factual-sounding claims the owner states without hedging (e.g. "I water every 3 days and it's thriving", "I let it go bone dry between waterings", "the pot has no drainage"). Treat these as AUTHORITATIVE TRUTH about what is currently working for this plant. Do NOT contradict a working asserted routine with a generic conservative schedule; tailor amount / frequency / guidance to reinforce it, and only caution if the owner describes a visible problem themselves.
 2. HEDGED HINTS — uncertain phrasings ("I think", "maybe", "possibly", "the tag said"). Treat these as SOFT EVIDENCE you may cross-check against the species and climate.
 ```
 
-## User template (active version 2)
+## User template (active version 3)
 
 ```
 Species: {{species_name}}
@@ -48,6 +49,8 @@ Species: {{species_name}}
 {{#if location}}Placement notes (apply OWNER CERTAINTY — asserted placement facts are authoritative): {{location}}{{/if}}
 {{#if geographic_location}}Geographic location: {{geographic_location}}{{/if}}
 {{#if goals_text}}Owner notes and any claims about watering routine or plant behaviour (apply OWNER CERTAINTY — owner-asserted facts are authoritative; do not override a working asserted routine with a generic conservative schedule): {{goals_text}}{{/if}}
+{{#if notes_text}}Owner journal notes (newest first; apply OWNER CERTAINTY — asserted watering cadence or observations are authoritative):
+{{notes_text}}{{/if}}
 
 Return JSON with:
 - amount: short phrase (e.g. "Water until it drains from the bottom").
@@ -61,3 +64,4 @@ Return JSON with:
 |---|---|
 | [V39](../../../backend/src/main/resources/db/migration/V39__bio_section_prompts_v1.sql) | Initial seed. |
 | [V43](../../../backend/src/main/resources/db/migration/V43__owner_certainty_prompts.sql) | Add OWNER CERTAINTY rule and thread `goals_text` through so owner-asserted watering routines are honored instead of overridden by a generic conservative schedule. |
+| [V47](../../../backend/src/main/resources/db/migration/V47__owner_notes_bio_inputs.sql) | Also thread `notes_text` through so owner-asserted watering cadence or observations in journal notes are honored alongside `goals_text` / `location`. |

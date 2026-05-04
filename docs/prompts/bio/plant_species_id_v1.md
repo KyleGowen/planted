@@ -11,6 +11,7 @@
 
 - [`SpeciesIdStrategy`](../../../backend/src/main/java/com/planted/bio/strategies/SpeciesIdStrategy.java) via [`PlantBioSectionProcessor`](../../../backend/src/main/java/com/planted/worker/PlantBioSectionProcessor.java) → [`OpenAiPlantClient.generateBioSection`](../../../backend/src/main/java/com/planted/client/OpenAiPlantClient.java).
 - Result cached in `plant_bio_sections` under key `SPECIES_ID` and used to feed the `species_name` context for the text-only care bio sections.
+- Re-run is enqueued on journal changes by [`BioSectionInvalidator.onJournalChanged`](../../../backend/src/main/java/com/planted/service/BioSectionInvalidator.java) so owner notes that assert or correct an identification flow through the species cascade.
 
 ## Input variables
 
@@ -20,6 +21,8 @@ All optional.
 |---|---|
 | `plant_name` | `Plant.getName()` — owner-asserted names are authoritative (see OWNER CERTAINTY rule); hedged phrasings stay soft evidence. |
 | `location` | `Plant.getLocation()` — owner-asserted placement is authoritative; hedged phrasings stay soft evidence. |
+| `goals_text` | `BioSectionContext.goalsText` → `Plant.getGoalsText()` — owner-asserted species / cultivar / native range claims are authoritative (OWNER CERTAINTY). |
+| `notes_text` | `BioSectionContext.notesText` — plain journal notes text assembled by [`OwnerNoteFormatter`](../../../backend/src/main/java/com/planted/service/OwnerNoteFormatter.java) (newest first, up to 25 entries). Owner-asserted facts here — including corrections of an earlier identification — are authoritative. |
 
 Image is required at the transport level: the strategy opts into vision (`key().requiresImage()` is true for `SPECIES_ID`), so [`PlantBioSectionProcessor`](../../../backend/src/main/java/com/planted/worker/PlantBioSectionProcessor.java) loads the plant's primary image as base64 and attaches it.
 
@@ -32,24 +35,27 @@ Image is required at the transport level: the strategy opts into vision (`key().
 { className, taxonomicFamily, genus, species /* epithet only */, variety, confidence, nativeRegions: string[] }
 ```
 
-## System prompt (active version 2)
+## System prompt (active version 3)
 
 ```
 You are a conservative plant identification expert. Look at the plant image and return a structured JSON identification only. Never hallucinate a species from the image alone; when the image is unclear and the owner has said nothing, leave fields blank and explain the uncertainty in "confidence". State the specific epithet (second word of the binomial) in "species", not the full binomial.
 
-OWNER CERTAINTY — the owner's own statements (plant_name, location) are a tiered source of evidence:
-1. ASSERTIONS — factual-sounding claims the owner states without hedging (e.g. "this is a ZZ plant", "Sansevieria trifasciata laurentii", "native to Madagascar"). Treat these as AUTHORITATIVE TRUTH for className / taxonomicFamily / genus / species / variety / nativeRegions. Do NOT override them with the image; use the image only to resolve fields the owner did not state.
+OWNER CERTAINTY — the owner's own statements (plant_name, location, goals_text, notes_text) are a tiered source of evidence:
+1. ASSERTIONS — factual-sounding claims the owner states without hedging (e.g. "this is a ZZ plant", "Sansevieria trifasciata laurentii", "actually a Sansevieria cylindrica — correcting the earlier ID", "native to Madagascar"). Treat these as AUTHORITATIVE TRUTH for className / taxonomicFamily / genus / species / variety / nativeRegions. Do NOT override them with the image; use the image only to resolve fields the owner did not state. If a newer note explicitly corrects an earlier identification, follow the correction — do not revert to the photo-only inference.
 2. HEDGED HINTS — uncertain phrasings ("I think", "maybe", "labeled as", "might be", "possibly", "the store said"). Treat these as SOFT EVIDENCE; cross-check against the image and diverge when the image clearly contradicts. Confidence should reflect the reconciliation.
 ```
 
-## User template (active version 2)
+## User template (active version 3)
 
 ```
 Identify the plant in the attached image.
 {{#if plant_name}}Owner's nickname or stated name for this plant (apply OWNER CERTAINTY — if this reads as an assertion about what the plant is, treat it as authoritative): {{plant_name}}{{/if}}
 {{#if location}}Where the owner says the plant lives (may assert an indoor/outdoor context — honor assertions, treat hedges as soft hints): {{location}}{{/if}}
+{{#if goals_text}}Owner notes, goals, and any identification or origin claims (apply OWNER CERTAINTY — asserted species / cultivar / native range are authoritative): {{goals_text}}{{/if}}
+{{#if notes_text}}Owner journal notes (newest first). Apply OWNER CERTAINTY — asserted facts here (including corrections of an earlier identification) are authoritative for species / variety / family / native range:
+{{notes_text}}{{/if}}
 
-Return JSON matching the schema with className, taxonomicFamily, genus, species, variety, confidence, and nativeRegions. When the owner has asserted a species, cultivar, or native region, reflect that assertion in the corresponding field rather than overriding it from the photo.
+Return JSON matching the schema with className, taxonomicFamily, genus, species, variety, confidence, and nativeRegions. When the owner has asserted a species, cultivar, or native region in any of the inputs above, reflect that assertion in the corresponding field rather than overriding it from the photo. When a later owner note corrects an earlier identification, follow the correction.
 ```
 
 ## Version history
@@ -58,3 +64,4 @@ Return JSON matching the schema with className, taxonomicFamily, genus, species,
 |---|---|
 | [V39](../../../backend/src/main/resources/db/migration/V39__bio_section_prompts_v1.sql) | Initial seed alongside the other bio-section prompts. |
 | [V43](../../../backend/src/main/resources/db/migration/V43__owner_certainty_prompts.sql) | Add OWNER CERTAINTY rule; drop the "weak hint / do not over-weight" framing on `plant_name` and `location`. |
+| [V47](../../../backend/src/main/resources/db/migration/V47__owner_notes_bio_inputs.sql) | Thread owner free-text (`goals_text` + `notes_text`) into the prompt so journal-note assertions — including corrections of an earlier ID — actually reach the model. Paired with `BioSectionInvalidator.onJournalChanged` invalidating `SPECIES_ID` on journal changes. |

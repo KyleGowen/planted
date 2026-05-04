@@ -6,9 +6,15 @@ import lombok.Setter;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
+import org.hibernate.annotations.DynamicUpdate;
 
 import java.time.OffsetDateTime;
 
+// @DynamicUpdate: only dirty columns go into UPDATE statements. Prevents the
+// reanalysis/registration worker from clobbering concurrent writes to
+// unrelated columns (e.g. placement_notes_summary written by
+// PlacementNotesSummaryProcessor) with the stale in-memory value it loaded
+// before the long-running LLM call.
 @Entity
 @Table(name = "plants")
 @Getter
@@ -16,6 +22,7 @@ import java.time.OffsetDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@DynamicUpdate
 public class Plant {
 
     @Id

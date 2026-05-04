@@ -82,33 +82,47 @@ class BioSectionInvalidatorTest {
     }
 
     @Test
-    void onJournalChanged_invalidatesHistorySummaryOnly() {
+    void onJournalChanged_invalidatesHistorySummaryAndSpeciesId() {
+        // A journal note can carry an owner-asserted species correction
+        // (OWNER CERTAINTY — e.g. "actually a Sansevieria cylindrica"),
+        // so SPECIES_ID must go stale too; the species cascade from the
+        // processor handles dependent sections when the species actually
+        // changes. Nothing is enqueued here — the lazy-refresh on next read
+        // picks it up, which keeps tokens unspent on plants nobody views.
         long plantId = 3L;
-        stubExistingRow(plantId, PlantBioSectionKey.HISTORY_SUMMARY);
+        Set<PlantBioSectionKey> expected = EnumSet.of(
+                PlantBioSectionKey.HISTORY_SUMMARY,
+                PlantBioSectionKey.SPECIES_ID);
+        for (PlantBioSectionKey key : expected) {
+            stubExistingRow(plantId, key);
+        }
 
         invalidator.onJournalChanged(plantId);
 
-        Set<PlantBioSectionKey> saved = capturedSavedKeys(1);
-        assertThat(saved).containsExactly(PlantBioSectionKey.HISTORY_SUMMARY);
+        Set<PlantBioSectionKey> saved = capturedSavedKeys(expected.size());
+        assertThat(saved).containsExactlyInAnyOrderElementsOf(expected);
         verify(jobPublisher, never()).publish(any());
     }
 
     @Test
-    void onReanalysisRequested_enqueuesSpeciesIdAndHealthAssessmentOnly() {
+    void onReanalysisRequested_enqueuesEveryVisionSection() {
         long plantId = 4L;
 
         invalidator.onReanalysisRequested(plantId);
 
         ArgumentCaptor<PlantJobMessage> captor = ArgumentCaptor.forClass(PlantJobMessage.class);
-        verify(jobPublisher, org.mockito.Mockito.times(2)).publish(captor.capture());
+        verify(jobPublisher, org.mockito.Mockito.times(4)).publish(captor.capture());
         List<PlantJobMessage> msgs = captor.getAllValues();
         assertThat(msgs).allSatisfy(m -> {
             assertThat(m.getJobType()).isEqualTo(PlantJobMessage.JobType.PLANT_BIO_SECTION_REFRESH);
             assertThat(m.getPlantId()).isEqualTo(plantId);
         });
         assertThat(msgs).extracting(PlantJobMessage::getSectionKey)
-                .containsExactlyInAnyOrder(PlantBioSectionKey.SPECIES_ID,
-                        PlantBioSectionKey.HEALTH_ASSESSMENT);
+                .containsExactlyInAnyOrder(
+                        PlantBioSectionKey.SPECIES_ID,
+                        PlantBioSectionKey.HEALTH_ASSESSMENT,
+                        PlantBioSectionKey.LIGHT_CARE,
+                        PlantBioSectionKey.PLACEMENT_CARE);
     }
 
     @Test

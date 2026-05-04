@@ -97,7 +97,7 @@ Images are stored locally in `./backend/data/images/`.
 
 ```bash
 cd frontend
-cp .env.local.example .env.local
+# Optional: cp .env.local.example .env.local — for LAN/phone testing, leave NEXT_PUBLIC_API_URL unset (see that file).
 npm run dev
 ```
 
@@ -115,7 +115,7 @@ Use this when you open the UI from another device on the same private network (n
 4. **CORS** for direct browser→Spring calls is configured via `planted.cors.allowed-origin-patterns` in `application.yml` (localhost, Vercel, private LAN patterns). Same-origin traffic through Next does not need CORS for `/api`.
 5. Next.js 16 **allowedDevOrigins** is populated from this machine’s private IPv4 addresses at dev startup; use **`PLANTED_DEV_EXTRA_ORIGINS`** (comma-separated) if you need more hosts.
 
-Details and env hints: **[frontend/README.md](frontend/README.md)**. Quick helper (prints LAN IP and start lines): **`./scripts/planted-lan-dev.sh`**.
+Details and env hints: **[frontend/README.md](frontend/README.md)**. Quick helper (prefers the **default-route** interface’s IPv4, then falls back to `en0`–`en2`): **`./scripts/planted-lan-dev.sh`**. If it prints the wrong subnet, run `PLANTED_LAN_IP=<your-wifi-ip> ./scripts/planted-lan-dev.sh`.
 
 ---
 

@@ -32,6 +32,7 @@ public class WaterCareStrategy implements PlantBioSectionStrategy {
         vars.put("location", Optional.ofNullable(plant.getLocation()).orElse(""));
         vars.put("geographic_location", Optional.ofNullable(ctx.geographicLocation()).orElse(""));
         vars.put("goals_text", Optional.ofNullable(ctx.goalsText()).orElse(""));
+        vars.put("notes_text", Optional.ofNullable(ctx.notesText()).orElse(""));
         return vars;
     }
 

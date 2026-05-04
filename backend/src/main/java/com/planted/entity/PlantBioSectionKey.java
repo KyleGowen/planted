@@ -18,8 +18,8 @@ public enum PlantBioSectionKey {
     WATER_CARE(false, Duration.ofHours(24)),
     FERTILIZER_CARE(false, Duration.ofHours(24)),
     PRUNING_CARE(false, Duration.ofHours(24)),
-    LIGHT_CARE(false, Duration.ofHours(24)),
-    PLACEMENT_CARE(false, Duration.ofHours(24)),
+    LIGHT_CARE(true, Duration.ofHours(24)),
+    PLACEMENT_CARE(true, Duration.ofHours(24)),
     HISTORY_SUMMARY(false, Duration.ofHours(24));
 
     private final boolean requiresImage;

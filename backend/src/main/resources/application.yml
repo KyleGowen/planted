@@ -91,6 +91,7 @@ planted:
     type: local
     local-path: ./data/images
     # Optional: absolute image URLs for clients that call Spring directly. Leave unset when the UI proxies /images (Next dev).
+    # If set, use the LAN IP every client can reach; a stale subnet (e.g. after router changes) breaks phones until updated.
     # public-base-url: http://192.168.1.10:8080
   queue:
     type: local

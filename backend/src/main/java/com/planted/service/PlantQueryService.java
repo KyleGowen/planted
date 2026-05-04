@@ -2,9 +2,11 @@ package com.planted.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.planted.dto.ActivityEntryDto;
 import com.planted.dto.HistoryDailyDigestDto;
 import com.planted.dto.PlantDetailResponse;
 import com.planted.dto.PlantHistoryEntryDto;
+import com.planted.dto.PlantImageDto;
 import com.planted.dto.PlantListItemResponse;
 import com.planted.entity.*;
 import com.planted.mapper.PlantMapper;
@@ -14,13 +16,17 @@ import com.planted.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -76,6 +82,106 @@ public class PlantQueryService {
                             registrationAnalysis, descriptionSection);
                 })
                 .toList();
+    }
+
+    /**
+     * Aggregates the most recent care events and journal entries across all active plants,
+     * suitable for the mobile activity feed.
+     *
+     * <p>Fetches the top 25 rows from each event source, merges, sorts newest-first,
+     * and returns up to {@code limit} entries enriched with plant name and thumbnail.
+     */
+    @Transactional(readOnly = true)
+    public List<ActivityEntryDto> listRecentActivity(int limit) {
+        List<Plant> plants = plantRepository.findAllActive();
+        if (plants.isEmpty()) return List.of();
+
+        Map<Long, Plant> plantById = new HashMap<>();
+        Map<Long, PlantImageDto> thumbnailById = new HashMap<>();
+
+        for (Plant plant : plants) {
+            plantById.put(plant.getId(), plant);
+            PlantImage thumb = imageRepository
+                    .findFirstByPlantIdAndImageTypeOrderByCreatedAtDesc(plant.getId(), PlantImage.ImageType.ILLUSTRATED)
+                    .orElseGet(() -> imageRepository
+                            .findFirstByPlantIdAndImageTypeOrderByCreatedAtDesc(
+                                    plant.getId(), PlantImage.ImageType.ORIGINAL_UPLOAD)
+                            .orElse(null));
+            if (thumb != null) {
+                thumbnailById.put(plant.getId(), plantMapper.toImageDto(thumb));
+            }
+        }
+
+        int perSource = Math.max(limit, 25);
+        Pageable page = PageRequest.of(0, perSource);
+
+        List<ActivityEntryDto> entries = new ArrayList<>();
+
+        for (PlantHistoryEntry e : historyEntryRepository.findRecentAcrossAllPlants(page)) {
+            Plant plant = plantById.get(e.getPlantId());
+            if (plant == null) continue;
+            PlantImageDto image = e.getImageId() != null
+                    ? imageRepository.findById(e.getImageId()).map(plantMapper::toImageDto).orElse(null)
+                    : null;
+            entries.add(new ActivityEntryDto(
+                    plant.getId(), resolveActivityPlantName(plant),
+                    thumbnailById.get(plant.getId()),
+                    "JOURNAL", e.getNoteText(), image, e.getCreatedAt()));
+        }
+
+        for (PlantWateringEvent e : wateringEventRepository.findRecentAcrossAllPlants(page)) {
+            Plant plant = plantById.get(e.getPlantId());
+            if (plant == null) continue;
+            String note = e.getNotes() != null && !e.getNotes().isBlank()
+                    ? "Watered — " + e.getNotes().trim() : "Watered";
+            entries.add(new ActivityEntryDto(
+                    plant.getId(), resolveActivityPlantName(plant),
+                    thumbnailById.get(plant.getId()),
+                    "WATERING", note, null, e.getWateredAt()));
+        }
+
+        for (PlantFertilizerEvent e : fertilizerEventRepository.findRecentAcrossAllPlants(page)) {
+            Plant plant = plantById.get(e.getPlantId());
+            if (plant == null) continue;
+            StringBuilder note = new StringBuilder("Fertilized");
+            if (e.getFertilizerType() != null && !e.getFertilizerType().isBlank()) {
+                note.append(" (").append(e.getFertilizerType().trim()).append(")");
+            }
+            if (e.getNotes() != null && !e.getNotes().isBlank()) {
+                note.append(" — ").append(e.getNotes().trim());
+            }
+            entries.add(new ActivityEntryDto(
+                    plant.getId(), resolveActivityPlantName(plant),
+                    thumbnailById.get(plant.getId()),
+                    "FERTILIZER", note.toString(), null, e.getFertilizedAt()));
+        }
+
+        for (PlantPruneEvent e : pruneEventRepository.findRecentAcrossAllPlants(page)) {
+            Plant plant = plantById.get(e.getPlantId());
+            if (plant == null) continue;
+            String note = e.getNotes() != null && !e.getNotes().isBlank()
+                    ? "Pruned — " + e.getNotes().trim() : "Pruned";
+            PlantImageDto image = e.getImageId() != null
+                    ? imageRepository.findById(e.getImageId()).map(plantMapper::toImageDto).orElse(null)
+                    : null;
+            entries.add(new ActivityEntryDto(
+                    plant.getId(), resolveActivityPlantName(plant),
+                    thumbnailById.get(plant.getId()),
+                    "PRUNE", note, image, e.getPrunedAt()));
+        }
+
+        entries.sort((a, b) -> b.createdAt().compareTo(a.createdAt()));
+        return entries.stream().limit(limit).toList();
+    }
+
+    private String resolveActivityPlantName(Plant plant) {
+        if (plant.getName() != null && !plant.getName().isBlank()) return plant.getName();
+        if (plant.getGenus() != null && !plant.getGenus().isBlank()) {
+            return plant.getSpecies() != null && !plant.getSpecies().isBlank()
+                    ? plant.getGenus() + " " + plant.getSpecies()
+                    : plant.getGenus();
+        }
+        return "Unknown plant";
     }
 
     @Transactional(readOnly = true)

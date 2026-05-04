@@ -13,7 +13,9 @@ import com.planted.repository.PlantBioSectionRepository;
 import com.planted.repository.PlantImageRepository;
 import com.planted.repository.PlantRepository;
 import com.planted.service.CareHistoryFormatter;
+import com.planted.service.OwnerNoteFormatter;
 import com.planted.service.PlantReminderService;
+import com.planted.service.UserPhysicalAddressService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -50,8 +52,10 @@ public class PlantBioSectionProcessor {
     private final OpenAiPlantClient openAiClient;
     private final PlantJobPublisher jobPublisher;
     private final CareHistoryFormatter careHistoryFormatter;
+    private final OwnerNoteFormatter ownerNoteFormatter;
     private final ObjectMapper objectMapper;
     private final PlantReminderService plantReminderService;
+    private final UserPhysicalAddressService userPhysicalAddressService;
     private final Map<PlantBioSectionKey, PlantBioSectionStrategy> strategies;
 
     public PlantBioSectionProcessor(
@@ -61,8 +65,10 @@ public class PlantBioSectionProcessor {
             OpenAiPlantClient openAiClient,
             PlantJobPublisher jobPublisher,
             CareHistoryFormatter careHistoryFormatter,
+            OwnerNoteFormatter ownerNoteFormatter,
             ObjectMapper objectMapper,
             PlantReminderService plantReminderService,
+            UserPhysicalAddressService userPhysicalAddressService,
             List<PlantBioSectionStrategy> strategies) {
         this.plantRepository = plantRepository;
         this.sectionRepository = sectionRepository;
@@ -70,8 +76,10 @@ public class PlantBioSectionProcessor {
         this.openAiClient = openAiClient;
         this.jobPublisher = jobPublisher;
         this.careHistoryFormatter = careHistoryFormatter;
+        this.ownerNoteFormatter = ownerNoteFormatter;
         this.objectMapper = objectMapper;
         this.plantReminderService = plantReminderService;
+        this.userPhysicalAddressService = userPhysicalAddressService;
         EnumMap<PlantBioSectionKey, PlantBioSectionStrategy> map = new EnumMap<>(PlantBioSectionKey.class);
         for (PlantBioSectionStrategy s : strategies) {
             map.put(s.key(), s);
@@ -240,15 +248,20 @@ public class PlantBioSectionProcessor {
         String geo = buildGeographicLocation(plant);
         String timeline = careHistoryFormatter.formatForLlm(plant.getId());
         String goals = plant.getGoalsText();
-        return new BioSectionContext(speciesName, taxFamily, nativeRegions, geo, timeline, goals);
+        String notes = ownerNoteFormatter.formatForLlm(plant.getId());
+        return new BioSectionContext(speciesName, taxFamily, nativeRegions, geo, timeline, goals, notes);
     }
 
-    private static String buildGeographicLocation(Plant plant) {
+    private String buildGeographicLocation(Plant plant) {
         List<String> parts = new ArrayList<>();
         if (plant.getGeoCity() != null && !plant.getGeoCity().isBlank()) parts.add(plant.getGeoCity().trim());
         if (plant.getGeoState() != null && !plant.getGeoState().isBlank()) parts.add(plant.getGeoState().trim());
         if (plant.getGeoCountry() != null && !plant.getGeoCountry().isBlank()) parts.add(plant.getGeoCountry().trim());
-        return parts.isEmpty() ? null : String.join(", ", parts);
+        if (!parts.isEmpty()) {
+            return String.join(", ", parts);
+        }
+        // New plants no longer collect per-plant geo fields; fall back to the user's saved address.
+        return userPhysicalAddressService.resolveAddressForPlant(plant).orElse(null);
     }
 
     /** Part of the fingerprint for vision sections: image identity (path or id) — not its full bytes. */

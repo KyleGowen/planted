@@ -9,6 +9,7 @@ import type {
   RequestHistorySummaryResponse,
   RequestPruningAnalysisResponse,
   RequestReanalysisResponse,
+  ActivityEntryDto,
 } from "@/types/plant";
 import type { UserLocationResponse } from "@/types/user";
 
@@ -269,4 +270,10 @@ export async function getFertilizerReminders(): Promise<PlantReminderResponse[]>
 
 export async function getPruningReminders(): Promise<PlantReminderResponse[]> {
   return apiFetch<PlantReminderResponse[]>("/api/reminders/pruning");
+}
+
+// ── Activity feed (mobile) ───────────────────────────────────────────────────
+
+export async function listActivity(limit = 100): Promise<ActivityEntryDto[]> {
+  return apiFetch<ActivityEntryDto[]>(`/api/activity?limit=${limit}`);
 }

@@ -53,11 +53,32 @@ public class OpenMeteoGeocodingClient implements GeocodingService {
         return result;
     }
 
-    private Optional<GeoCoordinates> fetch(String city, String state, String country) {
+    @Override
+    public Optional<GeoCoordinates> geocode(String freeform) {
+        String trimmed = trimToNull(freeform);
+        if (trimmed == null) {
+            return Optional.empty();
+        }
+        if (!properties.isEnabled()) {
+            return Optional.empty();
+        }
+
+        String key = "freeform|" + trimmed.toLowerCase(Locale.ROOT);
+        Optional<GeoCoordinates> cached = cache.get(key);
+        if (cached != null) {
+            return cached;
+        }
+
+        Optional<GeoCoordinates> result = fetch(trimmed, null, null);
+        cache.put(key, result);
+        return result;
+    }
+
+    private Optional<GeoCoordinates> fetch(String name, String state, String country) {
         try {
             UriComponentsBuilder builder = UriComponentsBuilder
                     .fromUriString(properties.getOpenMeteoGeocodingUrl())
-                    .queryParam("name", city)
+                    .queryParam("name", name)
                     .queryParam("count", 10)
                     .queryParam("language", "en")
                     .queryParam("format", "json");
@@ -75,8 +96,8 @@ public class OpenMeteoGeocodingClient implements GeocodingService {
             }
             return pickBestMatch(body, state, country);
         } catch (Exception e) {
-            log.warn("Open-Meteo geocoding failed for city='{}', state='{}', country='{}': {}",
-                    city, state, country, e.getMessage());
+            log.warn("Open-Meteo geocoding failed for name='{}', state='{}', country='{}': {}",
+                    name, state, country, e.getMessage());
             return Optional.empty();
         }
     }

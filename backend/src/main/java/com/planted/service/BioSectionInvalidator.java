@@ -70,18 +70,31 @@ public class BioSectionInvalidator {
                 PlantBioSectionKey.WATER_CARE));
     }
 
-    /** Journal entry added: history summary is stale. */
+    /**
+     * Journal entry added: history summary is stale, and SPECIES_ID becomes
+     * stale because the note may carry an owner-asserted species correction
+     * (OWNER CERTAINTY — e.g. "this is actually Sansevieria cylindrica, not a
+     * Snake Plant"). The SPECIES_ID processor cascade handles the remaining
+     * text sections when the resolved species actually changes, so we don't
+     * eagerly invalidate every care section here.
+     */
     public void onJournalChanged(Long plantId) {
-        invalidate(plantId, PlantBioSectionKey.HISTORY_SUMMARY);
+        invalidate(plantId, List.of(
+                PlantBioSectionKey.HISTORY_SUMMARY,
+                PlantBioSectionKey.SPECIES_ID));
     }
 
     /**
-     * Reanalysis requested: refresh the two vision sections immediately. The
-     * SPECIES_ID processor will cascade-invalidate the remaining text sections
-     * when (and only when) the resolved species actually changes.
+     * Reanalysis requested: refresh every vision section immediately so the
+     * new primary photo re-drives health, light, and placement attention
+     * flags. The SPECIES_ID processor will cascade-invalidate the remaining
+     * text sections when (and only when) the resolved species actually
+     * changes.
      */
     public void onReanalysisRequested(Long plantId) {
         enqueueRefresh(plantId, PlantBioSectionKey.SPECIES_ID);
         enqueueRefresh(plantId, PlantBioSectionKey.HEALTH_ASSESSMENT);
+        enqueueRefresh(plantId, PlantBioSectionKey.LIGHT_CARE);
+        enqueueRefresh(plantId, PlantBioSectionKey.PLACEMENT_CARE);
     }
 }

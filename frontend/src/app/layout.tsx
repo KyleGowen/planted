@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { Providers } from "@/lib/providers";
+import { MobileLayoutGate } from "@/components/mobile/MobileLayoutGate";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
@@ -18,7 +19,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <body className="min-h-screen bg-stone-50">
-        <Providers>{children}</Providers>
+        <Providers>
+          <MobileLayoutGate>{children}</MobileLayoutGate>
+        </Providers>
       </body>
     </html>
   );

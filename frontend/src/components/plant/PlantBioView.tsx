@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useRef, useMemo, useEffect } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useMemo, useEffect } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Droplets, Leaf, Scissors, Archive,
   ChevronLeft, ChevronRight, Globe, ScrollText, Sun, MapPin, Utensils, Pencil, Check, X, RefreshCw,
-  Camera, Send, Clock, HeartPulse,
+  Clock, HeartPulse,
 } from "lucide-react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PlantStatusCard } from "@/components/plant/PlantStatusCard";
+import { CareObservationInput } from "@/components/plant/CareObservationInput";
 import { ReminderIconRow } from "@/components/plant/ReminderIconRow";
 import {
   archivePlant,
@@ -31,6 +32,7 @@ import {
   addHistoryNote,
   uploadPlantPhoto,
   requestHistorySummary,
+  getUserLocation,
 } from "@/lib/api";
 import type {
   PlantDetailResponse,
@@ -56,6 +58,7 @@ import {
   getPruningSection,
   getWaterSection,
 } from "@/lib/bioSections";
+import { plantImageSrc } from "@/lib/plantMediaUrl";
 
 interface PlantBioViewProps {
   plant: PlantDetailResponse;
@@ -88,6 +91,12 @@ export function PlantBioView({
   const [growingPlacementInput, setGrowingPlacementInput] = useState("");
   const [placementDialogOpen, setPlacementDialogOpen] = useState(false);
   const [placementInput, setPlacementInput] = useState("");
+
+  const { data: userLocation } = useQuery({
+    queryKey: ["userLocation"],
+    queryFn: getUserLocation,
+  });
+  const hasUserLocation = Boolean(userLocation?.address?.trim());
 
   const archiveMutation = useMutation({
     mutationFn: () => archivePlant(plantId),
@@ -165,6 +174,8 @@ export function PlantBioView({
     mutationFn: (noteText: string) => addHistoryNote(plantId, noteText),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["plant", plantId] });
+      queryClient.invalidateQueries({ queryKey: ["plants"] });
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
       addNoteMutation.reset();
     },
   });
@@ -461,8 +472,10 @@ export function PlantBioView({
               <>
                 <p>
                   {(plant.growingContext ?? "INDOOR") === "OUTDOOR" ? "Outdoor" : "Indoor"}
-                  {(plant.growingContext ?? "INDOOR") === "OUTDOOR" && !plant.geoCity
-                    ? " · Add a city for weather reminders"
+                  {(plant.growingContext ?? "INDOOR") === "OUTDOOR"
+                    && !plant.geoCity
+                    && !hasUserLocation
+                    ? " · Add your location on the Plants page for weather reminders"
                     : ""}
                 </p>
                 {placementSummaryLine ? (
@@ -564,7 +577,7 @@ export function PlantBioView({
       speciesIdRefreshing={speciesIdSection.isRefreshing}
       speciesDescriptionRefreshing={speciesDescriptionSection.isRefreshing}
       historyEntries={plant.historyEntries ?? []}
-      heroImageUrl={mainImage?.url ?? null}
+      heroImageUrl={mainImage ? plantImageSrc(mainImage.url) : null}
       historyDailyDigests={plant.historyDailyDigests ?? []}
       historySummaryText={plant.historySummaryText}
       historySummaryCompletedAt={plant.historySummaryCompletedAt}
@@ -649,7 +662,7 @@ export function PlantBioView({
             // Native img so LCP gets a real loading="eager" on the DOM node (Next/Image can still warn for dynamic remote URLs in dev).
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={mainImage.url}
+              src={plantImageSrc(mainImage.url)}
               alt={displayName}
               className="absolute inset-0 h-full w-full object-cover"
               loading="eager"
@@ -709,7 +722,10 @@ export function PlantBioView({
                     <ThumbImage
                       key={img.id}
                       img={img}
-                      sameAsHero={mainImage != null && img.url === mainImage.url}
+                      sameAsHero={
+                        mainImage != null &&
+                        plantImageSrc(img.url) === plantImageSrc(mainImage.url)
+                      }
                     />
                   ))
                 ) : (
@@ -774,7 +790,7 @@ function ThumbImage({ img, sameAsHero }: { img: PlantImageDto; sameAsHero?: bool
   return (
     <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-stone-100 flex-shrink-0">
       <Image
-        src={img.url}
+        src={plantImageSrc(img.url)}
         alt=""
         fill
         className="object-cover"
@@ -800,7 +816,7 @@ function SecondaryImagePanel({
         // Next/Image remote-URL warnings on the same dynamic sources.
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={image.url}
+          src={plantImageSrc(image.url)}
           alt={alt}
           className="absolute inset-0 h-full w-full object-cover"
           loading="eager"
@@ -840,7 +856,7 @@ function ReferenceThumb({ img }: { img: PlantImageDto }) {
   return (
     <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-stone-100 flex-shrink-0">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={img.url} alt="" className="w-full h-full object-cover" />
+      <img src={plantImageSrc(img.url)} alt="" className="w-full h-full object-cover" />
     </div>
   );
 }
@@ -1502,99 +1518,6 @@ function CarePanel({
   );
 }
 
-function CareObservationInput({
-  onAddNote,
-  onAddImage,
-  addNotePending,
-  addImagePending,
-  noteError,
-  imageError,
-}: {
-  onAddNote: (text: string) => void;
-  onAddImage: (image: File, noteText?: string) => void;
-  addNotePending: boolean;
-  addImagePending: boolean;
-  noteError: string | null;
-  imageError: string | null;
-}) {
-  const [noteText, setNoteText] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const MAX_CHARS = 180;
-
-  function submitNote() {
-    const trimmed = noteText.trim();
-    if (!trimmed) return;
-    onAddNote(trimmed);
-    setNoteText("");
-  }
-
-  function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const caption = noteText.trim() || undefined;
-    onAddImage(file, caption);
-    setNoteText("");
-    e.target.value = "";
-  }
-
-  const journalError = noteError ?? imageError;
-
-  return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-3 flex flex-col gap-2">
-        <textarea
-          value={noteText}
-          onChange={(e) => setNoteText(e.target.value.slice(0, MAX_CHARS))}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              submitNote();
-            }
-          }}
-          placeholder="Add an observation or note about your plant…"
-          rows={2}
-          className="w-full resize-none text-sm text-stone-700 placeholder:text-stone-300 bg-transparent outline-none leading-snug"
-        />
-        {journalError && (
-          <p className="text-xs text-red-600 leading-snug" role="alert">
-            {journalError}
-          </p>
-        )}
-        <div className="flex items-center justify-between">
-          <span className={`text-xs tabular-nums ${noteText.length >= MAX_CHARS ? "text-red-400" : "text-stone-300"}`}>
-            {noteText.length}/{MAX_CHARS}
-          </span>
-          <div className="flex items-center gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic"
-              className="hidden"
-              onChange={handleImageChange}
-            />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={addImagePending}
-              className="p-1.5 rounded-full text-stone-400 hover:text-stone-600 hover:bg-stone-100 transition-colors disabled:opacity-40"
-              title={noteText.trim() ? "Add photo with note as caption" : "Add photo"}
-            >
-              <Camera size={16} />
-            </button>
-            <button
-              type="button"
-              onClick={submitNote}
-              disabled={!noteText.trim() || addNotePending}
-              className="p-1.5 rounded-full text-green-600 hover:bg-green-50 transition-colors disabled:opacity-30"
-              title="Save note"
-            >
-              <Send size={16} />
-            </button>
-          </div>
-        </div>
-    </div>
-  );
-}
-
 /** Right-aligned native range, paired on the same row as the species name in the species pane. */
 function NativeToAside({ value }: { value: string }) {
   return (
@@ -1629,7 +1552,7 @@ function HistoryTimelineRow({
         sameAsHero={
           heroImageUrl != null &&
           row.entry.image != null &&
-          row.entry.image.url === heroImageUrl
+          plantImageSrc(row.entry.image.url) === heroImageUrl
         }
         omitBorder
       />
@@ -1693,7 +1616,7 @@ function HistoryEntryRow({
       {entry.image ? (
         <div className="relative w-14 h-14 rounded-lg overflow-hidden bg-stone-100 flex-shrink-0">
           <Image
-            src={entry.image.url}
+            src={plantImageSrc(entry.image.url)}
             alt=""
             fill
             className="object-cover"

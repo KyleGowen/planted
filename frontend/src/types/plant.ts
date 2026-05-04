@@ -241,3 +241,14 @@ export interface RecordFertilizerRequest {
   fertilizerType?: string;
   notes?: string;
 }
+
+export interface ActivityEntryDto {
+  plantId: number;
+  plantName: string | null;
+  plantThumbnail: PlantImageDto | null;
+  /** JOURNAL | WATERING | FERTILIZER | PRUNE */
+  entryKind: string;
+  noteText: string | null;
+  image: PlantImageDto | null;
+  createdAt: string;
+}

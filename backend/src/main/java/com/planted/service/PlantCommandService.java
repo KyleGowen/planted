@@ -41,6 +41,7 @@ public class PlantCommandService {
     private final PlantReminderService plantReminderService;
     private final GeocodingService geocodingService;
     private final BioSectionInvalidator bioSectionInvalidator;
+    private final UserPhysicalAddressService userPhysicalAddressService;
 
     @Value("${planted.user.default-id:default}")
     private String defaultUserId;
@@ -52,9 +53,6 @@ public class PlantCommandService {
             String location,
             String goalsText,
             OffsetDateTime lastWateredAt,
-            String geoCountry,
-            String geoState,
-            String geoCity,
             PlantGrowingContext growingContext) {
 
         validateImageFile(imageFile);
@@ -64,10 +62,13 @@ public class PlantCommandService {
         Double latitude = null;
         Double longitude = null;
         if (ctx == PlantGrowingContext.OUTDOOR) {
-            GeoCoordinates coords = geocodingService.geocode(geoCity, geoState, geoCountry).orElse(null);
-            if (coords != null) {
-                latitude = coords.latitude();
-                longitude = coords.longitude();
+            String userAddress = userPhysicalAddressService.getAddressForUserId(defaultUserId).orElse(null);
+            if (userAddress != null) {
+                GeoCoordinates coords = geocodingService.geocode(userAddress).orElse(null);
+                if (coords != null) {
+                    latitude = coords.latitude();
+                    longitude = coords.longitude();
+                }
             }
         }
 
@@ -77,9 +78,6 @@ public class PlantCommandService {
                 .name(name)
                 .location(location)
                 .goalsText(goalsText)
-                .geoCountry(geoCountry)
-                .geoState(geoState)
-                .geoCity(geoCity)
                 .growingContext(ctx)
                 .latitude(latitude)
                 .longitude(longitude)
